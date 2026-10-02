@@ -87,15 +87,17 @@ def _bearing_diff(b1: float, b2: float) -> float:
     return d - 360 if d > 180 else d
 
 
-def build_graph() -> nx.MultiDiGraph:
+def build_graph(bbox: dict = None, path: str = None) -> nx.MultiDiGraph:
     """
     Download or load the SF drive graph, enrich edges with features,
     and return a NetworkX MultiDiGraph.
     """
+    bbox = bbox or SF_BBOX
+    path = path or GRAPH_SAVE_PATH
     # ── Load if cached ─────────────────────────────────────────
-    if os.path.exists(GRAPH_SAVE_PATH) and OSMNX_AVAILABLE:
+    if os.path.exists(path) and OSMNX_AVAILABLE:
         print("[graph_builder] Loading cached graph …")
-        G = ox.load_graphml(GRAPH_SAVE_PATH)
+        G = ox.load_graphml(path)
         G = _ensure_features(G)
         return G
 
@@ -105,24 +107,24 @@ def build_graph() -> nx.MultiDiGraph:
             # OSMnx 2.x API: bbox=(left, bottom, right, top)
             G = ox.graph_from_bbox(
                 bbox=(
-                    SF_BBOX["west"], SF_BBOX["south"],
-                    SF_BBOX["east"], SF_BBOX["north"],
+                    bbox["west"], bbox["south"],
+                    bbox["east"], bbox["north"],
                 ),
                 network_type="drive",
             )
         except TypeError:
             # OSMnx 1.x fallback
             G = ox.graph_from_bbox(
-                north=SF_BBOX["north"], south=SF_BBOX["south"],
-                east=SF_BBOX["east"],  west=SF_BBOX["west"],
+                north=bbox["north"], south=bbox["south"],
+                east=bbox["east"],  west=bbox["west"],
                 network_type="drive",
             )
         try:
             G = ox.add_edge_bearings(G)
         except Exception:
             pass  # bearings computed manually in _ensure_features
-        ox.save_graphml(G, GRAPH_SAVE_PATH)
-        print(f"[graph_builder] Saved graph → {GRAPH_SAVE_PATH}")
+        ox.save_graphml(G, path)
+        print(f"[graph_builder] Saved graph → {path}")
     else:
         print("[graph_builder] osmnx not available – building toy SF grid …")
         G = _build_toy_sf_grid()

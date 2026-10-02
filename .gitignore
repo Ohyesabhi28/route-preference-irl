@@ -44,3 +44,7 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Raw datasets (large, download separately)
+data/porto/
+*.zip

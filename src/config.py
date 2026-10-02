@@ -31,6 +31,17 @@ SF_BBOX = {
     "west":  -122.4400,
 }
 
+# Porto (real taxi GPS, ECML/PKDD 2015) -- central Porto
+PORTO_BBOX = {
+    "north": 41.1850,
+    "south": 41.1400,
+    "east":  -8.5800,
+    "west":  -8.6500,
+}
+PORTO_RAW_CSV      = os.path.join(DATA_DIR, "porto", "train.csv")
+PORTO_GRAPH_PATH   = os.path.join(DATA_DIR, "porto_drive_graph.graphml")
+PORTO_TRAJ_PATH    = os.path.join(DATA_DIR, "porto_trajectories.pkl")
+
 GRAPH_SAVE_PATH   = os.path.join(DATA_DIR, "sf_drive_graph.graphml")
 TRAJ_SAVE_PATH    = os.path.join(DATA_DIR, "synthetic_trajectories.pkl")
 WEIGHTS_SAVE_PATH = os.path.join(MODELS_DIR, "irl_weights.npy")
