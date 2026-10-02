@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.so
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Cache files
+cache/
+*.json.cache
+
+# Compiled data (large binary files - regeneratable)
+# Uncomment if you don't want to track these:
+# data/sf_drive_graph.graphml
+# data/synthetic_trajectories.pkl
+# models/irl_weights.npy
+# models/irl_weights_history.pkl
+# results/irl_history.pkl
+
+# Jupyter Notebooks checkpoints
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

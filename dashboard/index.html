@@ -1,0 +1,1140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IRL Route Intelligence — San Francisco</title>
+  <meta name="description" content="Inverse Reinforcement Learning for Route Preference Learning on the San Francisco road network. Visualise learned driver preferences, compare routes, and explore MaxEnt IRL results." />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+
+  <!-- Leaflet for map -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <style>
+    /* ── Reset & Tokens ─────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-base:    #060b18;
+      --bg-card:    rgba(10, 20, 45, 0.85);
+      --bg-panel:   rgba(8, 16, 38, 0.9);
+      --border:     rgba(0, 212, 255, 0.15);
+      --border-glow:rgba(0, 212, 255, 0.4);
+      --cyan:       #00d4ff;
+      --cyan-dim:   rgba(0, 212, 255, 0.2);
+      --teal:       #00ffcc;
+      --violet:     #9b59f5;
+      --amber:      #f5c542;
+      --red:        #ff4d6d;
+      --green:      #39ff7e;
+      --text-1:     #e8f4ff;
+      --text-2:     #7aa8cc;
+      --text-3:     #4a7090;
+      --font:       'Inter', sans-serif;
+      --mono:       'JetBrains Mono', monospace;
+      --radius:     12px;
+      --radius-sm:  8px;
+      --shadow:     0 8px 32px rgba(0,0,0,0.6);
+      --glow-cyan:  0 0 20px rgba(0, 212, 255, 0.3);
+      --glow-teal:  0 0 20px rgba(0, 255, 204, 0.3);
+    }
+
+    html, body { height: 100%; overflow: hidden; }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg-base);
+      color: var(--text-1);
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Animated background grid ───────────────────── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* ── Topbar ─────────────────────────────────────── */
+    #topbar {
+      position: relative;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 0 24px;
+      height: 64px;
+      background: rgba(6,11,24,0.95);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(12px);
+      flex-shrink: 0;
+    }
+
+    #logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+    }
+    #logo-icon {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, var(--cyan), var(--violet));
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; font-weight: 800; color: #fff;
+      box-shadow: var(--glow-cyan);
+    }
+    #logo-text {
+      font-size: 13px; font-weight: 700; line-height: 1.2;
+      color: var(--text-1);
+    }
+    #logo-sub { font-size: 10px; color: var(--text-3); font-weight: 400; }
+
+    #topbar-title {
+      flex: 1;
+      font-size: 15px;
+      font-weight: 700;
+      background: linear-gradient(90deg, var(--cyan), var(--teal));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: 0.5px;
+    }
+
+    #status-indicator {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 14px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      font-size: 12px; color: var(--text-2);
+    }
+    #status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--text-3);
+      transition: background 0.3s, box-shadow 0.3s;
+    }
+    #status-dot.ready   { background: var(--green);  box-shadow: 0 0 8px var(--green); }
+    #status-dot.training{ background: var(--amber);  box-shadow: 0 0 8px var(--amber);
+                          animation: pulse 1s infinite; }
+    #status-dot.error   { background: var(--red);    box-shadow: 0 0 8px var(--red); }
+
+    @keyframes pulse {
+      0%,100% { opacity: 1; } 50% { opacity: 0.4; }
+    }
+
+    #run-btn {
+      display: flex; align-items: center; gap: 6px;
+      padding: 8px 18px;
+      background: linear-gradient(135deg, var(--cyan), var(--violet));
+      border: none; border-radius: 8px;
+      color: #fff; font-family: var(--font); font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: opacity 0.2s, transform 0.1s;
+      box-shadow: 0 4px 16px rgba(0,212,255,0.3);
+    }
+    #run-btn:hover  { opacity: 0.9; transform: translateY(-1px); }
+    #run-btn:active { transform: translateY(0); }
+    #run-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+    /* ── Main layout ─────────────────────────────────── */
+    #main {
+      position: relative;
+      z-index: 1;
+      flex: 1;
+      display: grid;
+      grid-template-columns: 320px 1fr 300px;
+      grid-template-rows: 1fr;
+      gap: 0;
+      overflow: hidden;
+    }
+
+    /* ── Sidebar shared ──────────────────────────────── */
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 16px;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+    .sidebar::-webkit-scrollbar { width: 4px; }
+    .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    /* ── Cards ───────────────────────────────────────── */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      backdrop-filter: blur(8px);
+      box-shadow: var(--shadow);
+      transition: border-color 0.3s;
+    }
+    .card:hover { border-color: var(--border-glow); }
+
+    .card-title {
+      font-size: 11px; font-weight: 700; letter-spacing: 1.2px;
+      text-transform: uppercase; color: var(--cyan); margin-bottom: 12px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .card-title::before {
+      content: '';
+      display: inline-block;
+      width: 3px; height: 14px;
+      background: linear-gradient(var(--cyan), var(--violet));
+      border-radius: 2px;
+    }
+
+    /* ── Map ─────────────────────────────────────────── */
+    #map-container {
+      position: relative;
+      flex: 1;
+    }
+    #map {
+      width: 100%; height: 100%;
+    }
+    .leaflet-container {
+      background: #060b18 !important;
+    }
+
+    /* Map overlay controls */
+    #map-controls {
+      position: absolute;
+      top: 12px; left: 12px;
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .method-btn {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 14px;
+      background: rgba(6,11,24,0.9);
+      border: 1px solid;
+      border-radius: 8px;
+      font-size: 12px; font-weight: 600; font-family: var(--font);
+      cursor: pointer; transition: all 0.2s;
+      color: var(--text-1);
+      backdrop-filter: blur(8px);
+    }
+    .method-btn.active { background: rgba(0,212,255,0.12); }
+    .method-btn .dot {
+      width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+    }
+
+    #route-info {
+      position: absolute;
+      bottom: 16px; left: 50%; transform: translateX(-50%);
+      z-index: 1000;
+      display: flex; gap: 10px;
+    }
+    .route-badge {
+      padding: 8px 16px;
+      background: rgba(6,11,24,0.92);
+      border: 1px solid var(--border-glow);
+      border-radius: 20px;
+      font-size: 12px; font-weight: 600;
+      backdrop-filter: blur(8px);
+      transition: all 0.3s;
+    }
+
+    /* ── Feature weights chart ───────────────────────── */
+    .chart-wrap {
+      position: relative;
+      height: 140px;
+    }
+
+    /* ── Metrics table ───────────────────────────────── */
+    .metrics-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+    }
+    .metrics-table th {
+      text-align: right; padding: 4px 6px;
+      color: var(--text-3); font-weight: 600;
+      border-bottom: 1px solid var(--border);
+    }
+    .metrics-table th:first-child { text-align: left; }
+    .metrics-table td {
+      text-align: right; padding: 5px 6px;
+      color: var(--text-2);
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .metrics-table td:first-child { text-align: left; color: var(--text-1); }
+    .metrics-table .best { color: var(--green); font-weight: 700; }
+    .metrics-table tr:hover td { background: rgba(0,212,255,0.04); }
+
+    /* ── Weight comparison ───────────────────────────── */
+    .weight-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+    .weight-label {
+      font-size: 10px; color: var(--text-3);
+      width: 90px; flex-shrink: 0;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .weight-bar-wrap {
+      flex: 1;
+      height: 16px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 3px;
+      overflow: hidden;
+      position: relative;
+    }
+    .weight-bar {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.6s cubic-bezier(0.4,0,0.2,1);
+    }
+    .weight-val {
+      font-family: var(--mono);
+      font-size: 10px; color: var(--text-2);
+      width: 42px; text-align: right; flex-shrink: 0;
+    }
+
+    /* ── Trajectory list ─────────────────────────────── */
+    .traj-item {
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      margin-bottom: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .traj-item:hover {
+      border-color: var(--border-glow);
+      background: var(--cyan-dim);
+    }
+    .traj-item.active {
+      border-color: var(--cyan);
+      background: rgba(0,212,255,0.1);
+    }
+    .traj-meta {
+      font-size: 10px; color: var(--text-3);
+      display: flex; justify-content: space-between;
+    }
+
+    /* ── Log ─────────────────────────────────────────── */
+    #log-box {
+      height: 90px;
+      overflow-y: auto;
+      background: rgba(0,0,0,0.3);
+      border-radius: 6px;
+      padding: 8px;
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text-2);
+      scrollbar-width: thin;
+    }
+    #log-box .log-line { margin-bottom: 2px; }
+    #log-box .log-line.ok  { color: var(--green); }
+    #log-box .log-line.err { color: var(--red); }
+
+    /* ── Spinner ─────────────────────────────────────── */
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,0.1);
+      border-top-color: var(--cyan);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      display: inline-block;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Stat pills ──────────────────────────────────── */
+    .stat-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .stat-pill {
+      background: rgba(0,212,255,0.07);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+      text-align: center;
+    }
+    .stat-num {
+      font-size: 20px; font-weight: 800;
+      background: linear-gradient(135deg, var(--cyan), var(--teal));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .stat-label {
+      font-size: 10px; color: var(--text-3);
+      margin-top: 2px; letter-spacing: 0.5px;
+    }
+
+    /* ── Legend ──────────────────────────────────────── */
+    .legend-item {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 11px; color: var(--text-2);
+      margin-bottom: 4px;
+    }
+    .legend-line {
+      width: 24px; height: 3px; border-radius: 2px; flex-shrink: 0;
+    }
+
+    /* ── Tooltip ─────────────────────────────────────── */
+    #tooltip {
+      position: fixed;
+      z-index: 9999;
+      padding: 8px 12px;
+      background: rgba(6,11,24,0.95);
+      border: 1px solid var(--border-glow);
+      border-radius: 8px;
+      font-size: 11px;
+      color: var(--text-1);
+      pointer-events: none;
+      display: none;
+      backdrop-filter: blur(8px);
+    }
+
+    /* ── Responsive ──────────────────────────────────── */
+    @media (max-width: 900px) {
+      #main { grid-template-columns: 1fr; grid-template-rows: auto 50vh auto; }
+      .sidebar { max-height: 250px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Topbar -->
+<header id="topbar">
+  <a id="logo" href="#">
+    <div id="logo-icon">SF</div>
+    <div>
+      <div id="logo-text">IRL Route Intelligence</div>
+      <div id="logo-sub">San Francisco · MaxEnt IRL</div>
+    </div>
+  </a>
+
+  <div id="topbar-title">
+    Inverse Reinforcement Learning for Route Preference Learning
+  </div>
+
+  <div id="status-indicator">
+    <div id="status-dot"></div>
+    <span id="status-text">Connecting …</span>
+  </div>
+
+  <button id="run-btn" onclick="runPipeline()">
+    <span>▶</span> Run Pipeline
+  </button>
+</header>
+
+<!-- Main -->
+<div id="main">
+
+  <!-- Left Sidebar -->
+  <div class="sidebar" id="left-sidebar" style="background: var(--bg-panel); border-right: 1px solid var(--border);">
+
+    <!-- Graph Stats -->
+    <div class="card">
+      <div class="card-title">Road Network</div>
+      <div class="stat-grid">
+        <div class="stat-pill">
+          <div class="stat-num" id="stat-nodes">—</div>
+          <div class="stat-label">INTERSECTIONS</div>
+        </div>
+        <div class="stat-pill">
+          <div class="stat-num" id="stat-edges">—</div>
+          <div class="stat-label">ROAD SEGMENTS</div>
+        </div>
+        <div class="stat-pill">
+          <div class="stat-num" id="stat-train">—</div>
+          <div class="stat-label">TRAIN TRAJS</div>
+        </div>
+        <div class="stat-pill">
+          <div class="stat-num" id="stat-test">—</div>
+          <div class="stat-label">TEST TRAJS</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Training Convergence -->
+    <div class="card">
+      <div class="card-title">Training Convergence</div>
+      <div class="chart-wrap">
+        <canvas id="convergenceChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Learned Weights -->
+    <div class="card">
+      <div class="card-title">Learned Feature Weights</div>
+      <div id="weights-viz"></div>
+      <div class="legend-item" style="margin-top:8px;">
+        <div class="legend-line" style="background:var(--cyan)"></div>
+        <span>Learned (IRL)</span>
+        <div class="legend-line" style="background:var(--violet); margin-left:8px;"></div>
+        <span>Ground Truth</span>
+      </div>
+    </div>
+
+    <!-- Pipeline Log -->
+    <div class="card">
+      <div class="card-title">Pipeline Log</div>
+      <div id="log-box"><div class="log-line">Waiting for backend …</div></div>
+    </div>
+
+  </div>
+
+  <!-- Map -->
+  <div id="map-container">
+    <div id="map"></div>
+
+    <!-- Map method controls -->
+    <div id="map-controls">
+      <button class="method-btn active" id="btn-irl"
+        style="border-color:rgba(0,212,255,0.5);"
+        onclick="selectMethod('irl', this)">
+        <span class="dot" style="background:var(--cyan); box-shadow:0 0 8px var(--cyan)"></span>
+        IRL (MaxEnt)
+      </button>
+      <button class="method-btn" id="btn-shortest"
+        style="border-color:rgba(245,197,66,0.4);"
+        onclick="selectMethod('shortest', this)">
+        <span class="dot" style="background:var(--amber);"></span>
+        Dijkstra Shortest
+      </button>
+      <button class="method-btn" id="btn-fastest"
+        style="border-color:rgba(255,77,109,0.4);"
+        onclick="selectMethod('fastest', this)">
+        <span class="dot" style="background:var(--red);"></span>
+        Dijkstra Fastest
+      </button>
+      <button class="method-btn" id="btn-myopic"
+        style="border-color:rgba(155,89,245,0.4);"
+        onclick="selectMethod('myopic', this)">
+        <span class="dot" style="background:var(--violet);"></span>
+        Myopic Classifier
+      </button>
+      <button class="method-btn" style="border-color:rgba(0,255,204,0.4);"
+        onclick="loadRandomRoute()">
+        <span style="font-size:14px">🔀</span> Random OD Pair
+      </button>
+    </div>
+
+    <!-- Route badges -->
+    <div id="route-info"></div>
+  </div>
+
+  <!-- Right Sidebar -->
+  <div class="sidebar" id="right-sidebar" style="background: var(--bg-panel); border-left: 1px solid var(--border);">
+
+    <!-- Evaluation Metrics -->
+    <div class="card">
+      <div class="card-title">Evaluation Metrics</div>
+      <div id="eval-table-wrap">
+        <div style="color:var(--text-3); font-size:11px; text-align:center; padding:20px 0;">
+          Run pipeline to see results
+        </div>
+      </div>
+    </div>
+
+    <!-- Expert Trajectories -->
+    <div class="card">
+      <div class="card-title">Expert Trajectories</div>
+      <div id="traj-list">
+        <div style="color:var(--text-3); font-size:11px;">Loading …</div>
+      </div>
+    </div>
+
+    <!-- Feature comparison chart -->
+    <div class="card">
+      <div class="card-title">Weight Radar</div>
+      <div class="chart-wrap">
+        <canvas id="radarChart"></canvas>
+      </div>
+    </div>
+
+    <!-- MDP Info -->
+    <div class="card">
+      <div class="card-title">MDP Formulation</div>
+      <div style="font-size:11px; color:var(--text-2); line-height:1.8;">
+        <div><span style="color:var(--cyan)">State</span> s = (node, incoming edge)</div>
+        <div><span style="color:var(--amber)">Action</span> a = outgoing road segment</div>
+        <div><span style="color:var(--teal)">Reward</span> R = w<sup>T</sup>φ(s,a)</div>
+        <div><span style="color:var(--violet)">Policy</span> π ∝ exp(Q<sub>soft</sub>)</div>
+        <div style="margin-top:8px;"><span style="color:var(--text-3)">Algorithm:</span> MaxEnt IRL</div>
+        <div><span style="color:var(--text-3)">Env:</span> San Francisco OSM</div>
+        <div><span style="color:var(--text-3)">Features:</span> 10 edge attributes</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Tooltip -->
+<div id="tooltip"></div>
+
+<script>
+// ───────────────────────────────────────────────────────────
+// Config
+// ───────────────────────────────────────────────────────────
+const API = 'http://localhost:5000/api';
+const SF_CENTER = [37.768, -122.415];
+
+const COLORS = {
+  irl:      '#00d4ff',
+  shortest: '#f5c542',
+  fastest:  '#ff4d6d',
+  myopic:   '#9b59f5',
+  expert:   '#39ff7e',
+};
+
+// ───────────────────────────────────────────────────────────
+// Map init
+// ───────────────────────────────────────────────────────────
+const map = L.map('map', {
+  center: SF_CENTER, zoom: 13,
+  zoomControl: true,
+  attributionControl: false,
+});
+
+// Dark tile layer
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  maxZoom: 19,
+}).addTo(map);
+
+// Route polylines
+const routeLayers = {};
+const expertLayer = { layer: null };
+
+function clearRoute(method) {
+  if (routeLayers[method]) {
+    map.removeLayer(routeLayers[method]);
+    routeLayers[method] = null;
+  }
+}
+
+function drawRoute(coords, method) {
+  clearRoute(method);
+  if (!coords || coords.length < 2) return;
+  const lls = coords.map(c => [c.lat, c.lon]);
+  routeLayers[method] = L.polyline(lls, {
+    color: COLORS[method],
+    weight: method === 'irl' ? 5 : 3,
+    opacity: method === 'irl' ? 0.95 : 0.7,
+  }).addTo(map);
+
+  if (method === 'irl') {
+    map.fitBounds(routeLayers[method].getBounds(), { padding: [40, 40] });
+  }
+}
+
+function drawExpert(coords) {
+  if (expertLayer.layer) map.removeLayer(expertLayer.layer);
+  if (!coords || coords.length < 2) return;
+  const lls = coords.map(c => [c.lat, c.lon]);
+  expertLayer.layer = L.polyline(lls, {
+    color: COLORS.expert,
+    weight: 4,
+    opacity: 0.8,
+    dashArray: '8,8',
+  }).addTo(map);
+}
+
+// Markers
+let originMarker = null, destMarker = null;
+function setMarkers(orig, dest) {
+  if (originMarker) map.removeLayer(originMarker);
+  if (destMarker)   map.removeLayer(destMarker);
+  if (orig) {
+    originMarker = L.circleMarker([orig.lat, orig.lon], {
+      radius: 8, color: '#fff', fillColor: '#00d4ff',
+      fillOpacity: 1, weight: 2,
+    }).bindTooltip('Origin').addTo(map);
+  }
+  if (dest) {
+    destMarker = L.circleMarker([dest.lat, dest.lon], {
+      radius: 8, color: '#fff', fillColor: '#ff4d6d',
+      fillOpacity: 1, weight: 2,
+    }).bindTooltip('Destination').addTo(map);
+  }
+}
+
+// ───────────────────────────────────────────────────────────
+// Charts
+// ───────────────────────────────────────────────────────────
+let convergenceChart = null;
+let radarChart = null;
+
+function initConvergenceChart() {
+  const ctx = document.getElementById('convergenceChart').getContext('2d');
+  convergenceChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [{
+        label: 'Loss',
+        data: [],
+        borderColor: '#00d4ff',
+        backgroundColor: 'rgba(0,212,255,0.1)',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 0,
+        borderWidth: 2,
+      }, {
+        label: 'Grad Norm',
+        data: [],
+        borderColor: '#9b59f5',
+        backgroundColor: 'transparent',
+        tension: 0.4,
+        pointRadius: 0,
+        borderWidth: 1.5,
+        borderDash: [4,4],
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { display: false },
+        y: {
+          display: true,
+          ticks: { color: '#4a7090', font: { size: 9 } },
+          grid: { color: 'rgba(255,255,255,0.05)' },
+        }
+      },
+      animation: { duration: 600 },
+    }
+  });
+}
+
+function initRadarChart() {
+  const ctx = document.getElementById('radarChart').getContext('2d');
+  radarChart = new Chart(ctx, {
+    type: 'radar',
+    data: {
+      labels: [],
+      datasets: [{
+        label: 'Learned',
+        data: [],
+        borderColor: '#00d4ff',
+        backgroundColor: 'rgba(0,212,255,0.15)',
+        borderWidth: 2, pointRadius: 3,
+        pointBackgroundColor: '#00d4ff',
+      }, {
+        label: 'True',
+        data: [],
+        borderColor: '#9b59f5',
+        backgroundColor: 'rgba(155,89,245,0.1)',
+        borderWidth: 2, borderDash: [4,4], pointRadius: 3,
+        pointBackgroundColor: '#9b59f5',
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        r: {
+          ticks: { display: false },
+          grid: { color: 'rgba(255,255,255,0.06)' },
+          pointLabels: { color: '#4a7090', font: { size: 8 } },
+          angleLines: { color: 'rgba(255,255,255,0.05)' },
+        }
+      },
+      animation: { duration: 600 },
+    }
+  });
+}
+
+// ───────────────────────────────────────────────────────────
+// State
+// ───────────────────────────────────────────────────────────
+let currentMethod  = 'irl';
+let activeTrajectory = null;
+
+// ───────────────────────────────────────────────────────────
+// API helpers
+// ───────────────────────────────────────────────────────────
+async function apiFetch(path, opts = {}) {
+  try {
+    const res = await fetch(API + path, {
+      headers: { 'Content-Type': 'application/json' },
+      ...opts,
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (e) {
+    console.warn('[API]', path, e.message);
+    return null;
+  }
+}
+
+// ───────────────────────────────────────────────────────────
+// Status poll
+// ───────────────────────────────────────────────────────────
+let pollInterval = null;
+
+async function pollStatus() {
+  const data = await apiFetch('/status');
+  const dot  = document.getElementById('status-dot');
+  const txt  = document.getElementById('status-text');
+  const btn  = document.getElementById('run-btn');
+
+  if (!data) {
+    dot.className = 'error';
+    txt.textContent = 'Backend offline';
+    btn.disabled = false;
+    return;
+  }
+
+  if (data.training) {
+    dot.className = 'training';
+    txt.textContent = 'Training …';
+    btn.disabled = true;
+  } else if (data.irl_trained) {
+    dot.className = 'ready';
+    txt.textContent = 'Ready';
+    btn.disabled = false;
+    clearInterval(pollInterval);
+    pollInterval = null;
+    loadAll();
+  } else if (data.error) {
+    dot.className = 'error';
+    txt.textContent = 'Error';
+    btn.disabled = false;
+  } else {
+    dot.className = '';
+    txt.textContent = 'Not trained';
+    btn.disabled = false;
+  }
+
+  // Update log
+  if (data.log && data.log.length) {
+    const box = document.getElementById('log-box');
+    box.innerHTML = data.log.map(l => {
+      const cls = l.includes('error') || l.includes('Error') ? 'err'
+                : l.includes('complete') || l.includes('complete') ? 'ok' : '';
+      return `<div class="log-line ${cls}">${escHtml(l)}</div>`;
+    }).join('');
+    box.scrollTop = box.scrollHeight;
+  }
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ───────────────────────────────────────────────────────────
+// Load all data
+// ───────────────────────────────────────────────────────────
+async function loadAll() {
+  await Promise.all([
+    loadGraphStats(),
+    loadWeights(),
+    loadHistory(),
+    loadEvaluation(),
+    loadTrajectories(),
+    loadRandomRoute(),
+  ]);
+}
+
+async function loadGraphStats() {
+  const d = await apiFetch('/graph/stats');
+  if (!d) return;
+  document.getElementById('stat-nodes').textContent = fmtNum(d.n_nodes);
+  document.getElementById('stat-edges').textContent = fmtNum(d.n_edges);
+}
+
+function fmtNum(n) {
+  if (n >= 1000) return (n/1000).toFixed(1) + 'k';
+  return String(n);
+}
+
+async function loadWeights() {
+  const d = await apiFetch('/weights');
+  if (!d) return;
+
+  // Weight bars
+  const viz   = document.getElementById('weights-viz');
+  const labels = d.features.map(f => f.replace('road_','').replace('turn_',''));
+  const lw    = d.learned;
+  const tw    = d.true;
+  const maxAbs = Math.max(...lw.map(Math.abs), ...tw.map(Math.abs), 0.01);
+
+  viz.innerHTML = labels.map((lbl, i) => {
+    const lv = lw[i] ?? 0;
+    const tv = tw[i] ?? 0;
+    const lPct = Math.abs(lv) / maxAbs * 100;
+    const tPct = Math.abs(tv) / maxAbs * 100;
+    const lColor = lv >= 0 ? 'var(--cyan)' : 'var(--red)';
+    const tColor = tv >= 0 ? 'var(--violet)' : '#f5c542';
+    return `
+      <div class="weight-row" title="${d.features[i]}">
+        <div class="weight-label">${lbl}</div>
+        <div style="flex:1; display:flex; flex-direction:column; gap:2px;">
+          <div class="weight-bar-wrap">
+            <div class="weight-bar" style="width:${lPct}%; background:${lColor};"></div>
+          </div>
+          <div class="weight-bar-wrap">
+            <div class="weight-bar" style="width:${tPct}%; background:${tColor}; opacity:0.6;"></div>
+          </div>
+        </div>
+        <div class="weight-val">${lv.toFixed(2)}</div>
+      </div>`;
+  }).join('');
+
+  // Radar chart
+  if (radarChart) {
+    radarChart.data.labels = labels;
+    radarChart.data.datasets[0].data = lw;
+    radarChart.data.datasets[1].data = tw;
+    radarChart.update();
+  }
+
+  // Update stat pills for trajectories (add train/test counts here)
+  const status = await apiFetch('/status');
+  // can't get train/test count from status, use trajectories endpoint
+}
+
+async function loadHistory() {
+  const d = await apiFetch('/history');
+  if (!d || !d.iterations) return;
+  if (convergenceChart) {
+    convergenceChart.data.labels   = d.iterations;
+    convergenceChart.data.datasets[0].data = d.loss;
+    convergenceChart.data.datasets[1].data = d.grad_norm;
+    convergenceChart.update();
+  }
+}
+
+async function loadEvaluation() {
+  const d = await apiFetch('/evaluation');
+  if (!d) return;
+
+  const metrics = ['Edge Jaccard','Edge F1','Path Length Ratio',
+                   'Top-1 Accuracy','Top-3 Accuracy'];
+  const methods = Object.keys(d);
+
+  // Find best per metric
+  const best = {};
+  metrics.forEach(m => {
+    let bv = -Infinity, bk = null;
+    methods.forEach(k => {
+      const v = d[k][m];
+      if (v !== undefined && v !== null) {
+        // For path-length ratio, closest to 1 is best
+        const score = m === 'Path Length Ratio' ? -Math.abs(v-1) : v;
+        if (score > bv) { bv = score; bk = k; }
+      }
+    });
+    best[m] = bk;
+  });
+
+  const wrap = document.getElementById('eval-table-wrap');
+  const shortNames = {
+    'IRL (MaxEnt)':      'IRL',
+    'Dijkstra-Shortest': 'D-Dist',
+    'Dijkstra-Fastest':  'D-Time',
+    'Myopic-Classifier': 'Myopic',
+  };
+
+  wrap.innerHTML = `
+    <table class="metrics-table">
+      <thead>
+        <tr>
+          <th>Metric</th>
+          ${methods.map(m => `<th>${shortNames[m]||m}</th>`).join('')}
+        </tr>
+      </thead>
+      <tbody>
+        ${metrics.map(metric => `
+          <tr>
+            <td>${metric.replace(' ','&nbsp;')}</td>
+            ${methods.map(method => {
+              const v = d[method][metric];
+              const isBest = best[metric] === method;
+              const txt = v !== undefined ? v.toFixed(3) : '—';
+              return `<td class="${isBest ? 'best' : ''}">${txt}</td>`;
+            }).join('')}
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`;
+}
+
+async function loadTrajectories() {
+  const d = await apiFetch('/trajectories');
+  if (!d || !d.trajectories) return;
+
+  const list = document.getElementById('traj-list');
+  list.innerHTML = d.trajectories.map((t, i) => `
+    <div class="traj-item" id="traj-${i}" onclick="showTrajectory(${i})">
+      <div style="font-size:11px; font-weight:600; color:var(--text-1);">
+        Trip #${i+1}
+        <span style="float:right; color:var(--teal);">${t.n_edges} edges</span>
+      </div>
+      <div class="traj-meta">
+        <span>O: ${t.origin}</span>
+        <span>D: ${t.destination}</span>
+      </div>
+    </div>`).join('');
+
+  // Store for later
+  window._trajectories = d.trajectories;
+
+  // Update stat pills
+  document.getElementById('stat-train').textContent = '—';
+  document.getElementById('stat-test').textContent  = '—';
+
+  // Load status to get counts
+  const st = await apiFetch('/status');
+}
+
+function showTrajectory(idx) {
+  const trajs = window._trajectories;
+  if (!trajs || !trajs[idx]) return;
+  const t = trajs[idx];
+
+  // Deactivate all
+  document.querySelectorAll('.traj-item').forEach(el => el.classList.remove('active'));
+  document.getElementById(`traj-${idx}`).classList.add('active');
+
+  drawExpert(t.coords);
+  const first = t.coords[0];
+  const last  = t.coords[t.coords.length-1];
+  setMarkers(first, last);
+
+  activeTrajectory = t;
+}
+
+// ───────────────────────────────────────────────────────────
+// Route generation
+// ───────────────────────────────────────────────────────────
+async function loadRoute(method, origin=null, dest=null) {
+  const body = { method };
+  if (origin !== null) body.origin = origin;
+  if (dest   !== null) body.destination = dest;
+
+  const d = await apiFetch('/route', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  if (!d) return null;
+
+  drawRoute(d.route, method);
+  if (d.expert && d.expert.length > 1) drawExpert(d.expert);
+
+  const orig = d.route[0];
+  const dst  = d.route[d.route.length-1];
+  setMarkers(orig, dst);
+
+  updateRouteBadge(method, d.n_edges);
+  return d;
+}
+
+let _currentOD = null;
+
+async function loadRandomRoute() {
+  // Load IRL route with random OD
+  const d = await loadRoute('irl');
+  if (d) {
+    _currentOD = { origin: d.origin, destination: d.destination };
+    // Also load baselines for same OD
+    await Promise.all([
+      loadRoute('shortest', d.origin, d.destination),
+      loadRoute('fastest',  d.origin, d.destination),
+      loadRoute('myopic',   d.origin, d.destination),
+    ]);
+    highlightMethod(currentMethod);
+  }
+}
+
+function highlightMethod(method) {
+  // Bring selected layer to front, dim others
+  Object.entries(routeLayers).forEach(([m, layer]) => {
+    if (!layer) return;
+    layer.setStyle({
+      opacity: m === method ? 0.95 : 0.25,
+      weight:  m === method ? 5 : 2,
+    });
+    if (m === method) layer.bringToFront();
+  });
+}
+
+function selectMethod(method, btn) {
+  currentMethod = method;
+  document.querySelectorAll('.method-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  highlightMethod(method);
+}
+
+function updateRouteBadge(method, n) {
+  const info = document.getElementById('route-info');
+  const id   = `badge-${method}`;
+  let badge  = document.getElementById(id);
+  if (!badge) {
+    badge = document.createElement('div');
+    badge.id = id;
+    badge.className = 'route-badge';
+    info.appendChild(badge);
+  }
+  const color = COLORS[method];
+  badge.style.borderColor = color;
+  badge.style.color = color;
+  badge.innerHTML = `<span style="font-weight:700">${method.toUpperCase()}</span> · ${n} edges`;
+}
+
+// ───────────────────────────────────────────────────────────
+// Pipeline trigger
+// ───────────────────────────────────────────────────────────
+async function runPipeline() {
+  const btn = document.getElementById('run-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Starting…';
+
+  const d = await apiFetch('/run_pipeline', {
+    method: 'POST', body: JSON.stringify({})
+  });
+
+  if (d && d.started) {
+    pollInterval = setInterval(pollStatus, 2000);
+  } else {
+    btn.disabled = false;
+    btn.innerHTML = '<span>▶</span> Run Pipeline';
+  }
+}
+
+// ───────────────────────────────────────────────────────────
+// Initialise
+// ───────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  initConvergenceChart();
+  initRadarChart();
+
+  // Poll status on load
+  pollStatus();
+  // Start periodic status polling (every 3s to keep in sync)
+  setInterval(pollStatus, 3000);
+
+  // Load data if already trained
+  setTimeout(loadAll, 500);
+});
+</script>
+</body>
+</html>
