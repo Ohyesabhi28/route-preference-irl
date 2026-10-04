@@ -1,161 +1,99 @@
-# IRL Route Preference Learning — San Francisco
+<h1 align="center">Route Preference Learning</h1>
 
-**22AIE401 · Reinforcement Learning | Amrita Vishwa Vidyapeetham, Amritapuri**
+<p align="center">
+  <em>Nobody drives the shortest route. This project learns why.</em>
+</p>
 
-| Name | Roll No |
-|------|---------|
-| Abhinav Nair | AM.SC.U4AIE23005 |
-| Advaith K | AM.SC.U4AIE23010 |
-| Akash A | AM.SC.U4AIE23011 |
+<p align="center">
+  22AIE401 Reinforcement Learning &nbsp;·&nbsp; Amrita Vishwa Vidyapeetham, Amritapuri
+</p>
 
----
-
-## Overview
-
-This project implements **Maximum Entropy Inverse Reinforcement Learning (MaxEnt IRL)** for route preference learning on the **San Francisco OpenStreetMap road network**. The system learns latent driver preferences from historical GPS trajectories and uses them to generate human-aligned routes.
-
-```
-GPS Trajectories (Expert Demos)
-         ↓
-  Map-Matched Edge Sequences
-         ↓
-  MaxEnt IRL  (learn w* s.t. w*ᵀφ explains expert behaviour)
-         ↓
-  Soft Value Iteration  →  Stochastic Policy π_w
-         ↓
-  Route Generation  +  Evaluation vs Dijkstra baselines
-```
+<p align="center">
+  <img src="results/figures/route_comparison.png" alt="A learned route compared with shortest, fastest and the real driver's route" width="820">
+</p>
 
 ---
 
-## Project Structure
+## The idea
 
-```
-new/
-├── src/
-│   ├── config.py               # All hyperparameters & paths
-│   ├── graph_builder.py        # OSM graph download & feature engineering
-│   ├── trajectory_generator.py # Synthetic expert trajectory simulation
-│   ├── mdp.py                  # MDP + soft value iteration + MaxEnt policy
-│   ├── maxent_irl.py           # MaxEnt IRL gradient ascent trainer
-│   ├── baselines.py            # Dijkstra (shortest/fastest) + Myopic classifier
-│   ├── evaluation.py           # Jaccard, F1, path-ratio, top-k, log-likelihood
-│   ├── train.py                # End-to-end training pipeline
-│   └── api.py                  # Flask REST API
-├── dashboard/
-│   └── index.html              # Interactive web dashboard
-├── data/                       # Auto-created: graph, trajectories
-├── models/                     # Auto-created: learned weights
-├── results/                    # Auto-created: evaluation JSON
-├── run_pipeline.py             # Step 1: train
-├── run_api.py                  # Step 2: serve API
-└── requirements.txt
-```
+Ask a navigation app for directions and you get the shortest or the fastest road. Real drivers often ignore both. They avoid awkward turns, skip tiny side streets, stay on roads they trust. None of that is written on the map, and drivers can't easily tell you their rules.
 
----
+So we work backwards. We watch how drivers actually choose roads, and ask which hidden likes and dislikes would make those choices sensible. This is **inverse reinforcement learning**. We use its maximum-entropy form (Ziebart et al., 2008) with a deliberately simple reward: a weighted sum of ten road features. Because the model is that simple, you can read the weights directly and see what drivers care about.
 
-## Quick Start
+The learned weights then plan new routes the way those drivers would.
 
-### 1. Install dependencies
+## What we found so far
+
+All numbers below come from simulated drivers on San Francisco's road network, with 60 held-out trips. Simulated drivers have known preferences, so we can check that the method recovers them. It does.
+
+| Method | Overlap with driver's route (F1) | Edge Jaccard |
+|---|:---:|:---:|
+| **Learned from drivers (MaxEnt IRL)** | **0.704** | **0.602** |
+| Shortest distance | 0.521 | 0.401 |
+| Fastest time | 0.364 | 0.272 |
+| One-turn-at-a-time classifier | 0.079 | 0.051 |
+| *Oracle (told the true preferences)* | *0.703* | *0.601* |
+
+The learned model matches the oracle, which is the ceiling. The recovered weights point almost exactly the same direction as the true ones (cosine similarity 0.987).
+
+<p align="center">
+  <img src="results/figures/feature_weights.png" alt="Learned versus true feature weights" width="49%">
+  <img src="results/figures/evaluation_metrics.png" alt="Evaluation metrics across methods" width="49%">
+</p>
+
+> **Honest limit.** This shows the method works when drivers really do act like a linear-reward model. Whether real drivers do is the next question, and it needs real GPS data (see [Where this is going](#where-this-is-going)).
+
+## Try it
+
 ```bash
 pip install -r requirements.txt
+
+python run_pipeline.py     # download the map, simulate drivers, train, evaluate
+python run_api.py          # start the server on localhost:5000
 ```
 
-### 2. Run the training pipeline
-```bash
-python run_pipeline.py
+Then open `dashboard/index.html` in a browser. It walks through the idea one step at a time, with a live map showing each method's route next to the real driver's.
+
+The first run downloads San Francisco's road network from OpenStreetMap (about 30 seconds) and caches it.
+
+## How it works
+
+```
+ driver trips  ──►  road-by-road sequences  ──►  find the reward that
+ (GPS or            on the OSM map               explains the choices
+  simulated)                                          │
+                                                      ▼
+  compare with  ◄──  plan new routes  ◄──  soft policy: at each junction,
+  real drivers       for unseen trips       pick the next road by its reward
 ```
 
-This will:
-- Download the SF drive graph from OpenStreetMap (via OSMnx)
-- Generate 300 synthetic expert trajectories using ground-truth preference weights
-- Train MaxEnt IRL for 150 gradient-ascent iterations
-- Train the myopic logistic-regression baseline
-- Evaluate all methods and save results to `results/`
+<details>
+<summary><b>The model in detail</b></summary>
 
-> **Note**: First run downloads the OSM graph (~30 s). Subsequent runs load from cache.
+<br>
 
-### 3. Start the API server
-```bash
-python run_api.py
-```
+Route choice is a sequence of decisions, one at each junction, so we model it as a Markov decision process.
 
-### 4. Open the dashboard
-Open `dashboard/index.html` in your browser (or serve it with any static file server).
+| Part | Definition |
+|---|---|
+| State | the current intersection **and** the road you arrived on, which makes turn angles well defined |
+| Action | which outgoing road to take |
+| Reward | `R = wᵀφ`, linear in ten road features |
+| Policy | `π(a∣s) ∝ exp(Q_soft(s,a))`, the maximum-entropy choice rule |
+| Training | maximise the likelihood of the observed trips, with exact gradients and L-BFGS |
 
----
+The ten features: segment length, speed limit, travel time, three road classes (motorway, primary, residential), three turn types (straight, slight, sharp or U-turn), and number of lanes.
 
-## MDP Formulation
+</details>
 
-| Component | Definition |
-|-----------|-----------|
-| **State** `s` | `(current_node, incoming_edge)` — avoids non-Markovian turn ambiguity |
-| **Action** `a` | Choice of outgoing road segment at current intersection |
-| **Reward** `R(s,a)` | `wᵀ · φ(s,a)` — linear in 10 edge features |
-| **Policy** `π` | `π(a\|s) ∝ exp(Q_soft(s,a))` — MaxEnt stochastic policy |
-| **Objective** | Maximise log-likelihood of expert trajectories |
+<details>
+<summary><b>How we judge it</b></summary>
 
-### Feature Vector φ (10 dimensions)
+<br>
 
-| # | Feature | Description |
-|---|---------|-------------|
-| 0 | `length` | Segment length (m) |
-| 1 | `speed_kph` | Speed limit (km/h) |
-| 2 | `travel_time` | Estimated travel time (s) |
-| 3 | `road_motorway` | Motorway/trunk indicator |
-| 4 | `road_primary` | Primary/secondary road indicator |
-| 5 | `road_residential` | Residential/service road indicator |
-| 6 | `turn_straight` | Near-straight (< 30°) |
-| 7 | `turn_slight` | Slight turn (30–90°) |
-| 8 | `turn_sharp` | Sharp/U-turn (≥ 90°) |
-| 9 | `num_lanes` | Number of lanes |
-
----
-
-## Evaluation Metrics
-
-| Metric | Description |
-|--------|-------------|
-| **Edge Jaccard** | IoU of edge sets between predicted and expert route |
-| **Edge F1** | Precision + recall of edge overlap |
-| **Path Length Ratio** | `len(predicted) / len(expert)` — closer to 1.0 is better |
-| **Top-1 Accuracy** | Expert edge is the model's highest-scored choice at each junction |
-| **Top-3 Accuracy** | Expert edge is in the model's top-3 choices |
-| **Held-out Log-Likelihood** | `log π(τ\|w)` on unseen trajectories |
-
----
-
-## Baselines
-
-| Method | Description |
-|--------|-------------|
-| **Dijkstra-Shortest** | Minimises total edge length only |
-| **Dijkstra-Fastest** | Minimises estimated travel time |
-| **Myopic Classifier** | Logistic regression on edge features — black-box, no reward interpretation |
-| **MaxEnt IRL** | Learns interpretable reward weights from expert demonstrations |
-
----
-
-## API Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/status` | Pipeline status, training log |
-| GET | `/api/graph/stats` | Node/edge counts, sample nodes |
-| GET | `/api/weights` | Learned + true feature weights |
-| GET | `/api/history` | IRL training loss/gradient history |
-| GET | `/api/evaluation` | Full evaluation results table |
-| GET | `/api/trajectories` | Sample test trajectories (lat/lon) |
-| POST | `/api/route` | Generate route `{method, origin, destination}` |
-| POST | `/api/run_pipeline` | Trigger full training pipeline |
-
----
-
-## References
-
-1. Ziebart et al. (2008). *Maximum Entropy Inverse Reinforcement Learning*. AAAI.
-2. Liu et al. (2020). *Integrating Dijkstra into Deep IRL for Food Delivery*. Transp. Res. Part E.
-3. Zhao & Liang (2023). *Deep IRL for Route Choice Modeling*. Transp. Res. Part C.
-4. Barnes et al. (2024). *Massively Scalable IRL in Google Maps*. ICLR.
-5. Zhang et al. (2024). *Recursive Logit-Based Meta-IRL for Route Planning*. Transp. Res. Part E.
-6. Pitombeira-Neto et al. (2024). *Trajectory Modeling via Random Utility IRL*. Information Sciences.
+| Metric | Meaning |
+|---|---|
+| Edge Jaccard, Edge F1 | how many of the driver's roads the model's route shares |
+| Path length ratio | model route length divided by the driver's (1.0 is ideal) |
+| Top-1 / Top-3 accuracy | at each junction, is the driver's road the model's first or one of its top three choices |
+| Held-out log-likelihood | how probable the model finds unseen trips |
