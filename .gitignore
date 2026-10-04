@@ -44,3 +44,10 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Raw datasets (large, download separately)
+data/porto/
+*.zip
+
+# Generated Porto data (large, regeneratable via porto_data.py)
+data/porto_*
