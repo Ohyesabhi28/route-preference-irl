@@ -1,0 +1,327 @@
+{
+  "seeds": [
+    0
+  ],
+  "n_runs": 7,
+  "summary": {
+    "Dijkstra-Fastest": {
+      "Edge Jaccard": {
+        "fold_mean": 0.37920213860548324,
+        "fold_std": 0.008347347399117098,
+        "n_folds": 7,
+        "trip_ci_lo": 0.3671126099706511,
+        "trip_ci_hi": 0.38937437722886514
+      },
+      "Edge F1": {
+        "fold_mean": 0.4778735418095471,
+        "fold_std": 0.009365065647991996,
+        "n_folds": 7,
+        "trip_ci_lo": 0.46508050339411733,
+        "trip_ci_hi": 0.4872220450925208
+      },
+      "Path Length Ratio": {
+        "fold_mean": 1.0073098877400135,
+        "fold_std": 0.007442647439825826,
+        "n_folds": 7,
+        "trip_ci_lo": 1.0005531320268353,
+        "trip_ci_hi": 1.0182367653484246
+      }
+    },
+    "Dijkstra-Shortest": {
+      "Edge Jaccard": {
+        "fold_mean": 0.5381892548617725,
+        "fold_std": 0.0030678954806218823,
+        "n_folds": 7,
+        "trip_ci_lo": 0.526385597493846,
+        "trip_ci_hi": 0.5503517265886421
+      },
+      "Edge F1": {
+        "fold_mean": 0.6304367339843056,
+        "fold_std": 0.0026151035014466612,
+        "n_folds": 7,
+        "trip_ci_lo": 0.6188593775752174,
+        "trip_ci_hi": 0.6409348865103602
+      },
+      "Path Length Ratio": {
+        "fold_mean": 0.8822135090467134,
+        "fold_std": 0.004699834296315149,
+        "n_folds": 7,
+        "trip_ci_lo": 0.8789206961636848,
+        "trip_ci_hi": 0.8881721871696673
+      }
+    },
+    "Pop-Shortest": {
+      "Edge Jaccard": {
+        "fold_mean": 0.5940623687962159,
+        "fold_std": 0.005366523383116294,
+        "n_folds": 5,
+        "trip_ci_lo": 0.5812412078799032,
+        "trip_ci_hi": 0.6064747920965192
+      },
+      "Edge F1": {
+        "fold_mean": 0.6708473443265849,
+        "fold_std": 0.006632205703479862,
+        "n_folds": 5,
+        "trip_ci_lo": 0.6591325944154176,
+        "trip_ci_hi": 0.6822823475125728
+      },
+      "Path Length Ratio": {
+        "fold_mean": 0.9029864259776765,
+        "fold_std": 0.010719202179303998,
+        "n_folds": 5,
+        "trip_ci_lo": 0.8982065808462684,
+        "trip_ci_hi": 0.9078172904917999
+      }
+    },
+    "IRL-v2 (raw)": {
+      "Edge Jaccard": {
+        "fold_mean": 0.5298225369606936,
+        "fold_std": 0.012524384893881423,
+        "n_folds": 2,
+        "trip_ci_lo": 0.5091828338073174,
+        "trip_ci_hi": 0.5495570866075665
+      },
+      "Edge F1": {
+        "fold_mean": 0.6172962029133657,
+        "fold_std": 0.007160850918150554,
+        "n_folds": 2,
+        "trip_ci_lo": 0.5990107768508667,
+        "trip_ci_hi": 0.6358223254961703
+      },
+      "Path Length Ratio": {
+        "fold_mean": 0.9160266358883761,
+        "fold_std": 0.001801342818293892,
+        "n_folds": 2,
+        "trip_ci_lo": 0.9075110101751047,
+        "trip_ci_hi": 0.9239149407675183
+      },
+      "Log-Likelihood": {
+        "fold_mean": -0.17869686679678742,
+        "fold_std": 0.0071653451801145214,
+        "n_folds": 2,
+        "trip_ci_lo": -0.18600773142341753,
+        "trip_ci_hi": -0.17183353072938976
+      },
+      "Trip NLL": {
+        "fold_mean": 6.1501208533549505,
+        "fold_std": 0.46075488991000413,
+        "n_folds": 2,
+        "trip_ci_lo": 5.862682037444329,
+        "trip_ci_hi": 6.47088688069293
+      },
+      "Top-1 Accuracy": {
+        "fold_mean": 0.9262098105649825,
+        "fold_std": 0.003856425058540159,
+        "n_folds": 2,
+        "trip_ci_lo": 0.9223110272890657,
+        "trip_ci_hi": 0.9298618314469741
+      }
+    },
+    "IRL-v2 (calibrated)": {
+      "Edge Jaccard": {
+        "fold_mean": 0.5632639328800424,
+        "fold_std": 0.006941177197125042,
+        "n_folds": 2,
+        "trip_ci_lo": 0.5437815068158973,
+        "trip_ci_hi": 0.582970299764018
+      },
+      "Edge F1": {
+        "fold_mean": 0.6498716686273924,
+        "fold_std": 0.004784877793003834,
+        "n_folds": 2,
+        "trip_ci_lo": 0.6318398040912074,
+        "trip_ci_hi": 0.6677735492773502
+      },
+      "Path Length Ratio": {
+        "fold_mean": 0.8848314136874558,
+        "fold_std": 0.0024618469791483,
+        "n_folds": 2,
+        "trip_ci_lo": 0.8770930224114437,
+        "trip_ci_hi": 0.8922986513422229
+      },
+      "Log-Likelihood": {
+        "fold_mean": -0.17869686679678742,
+        "fold_std": 0.0071653451801145214,
+        "n_folds": 2,
+        "trip_ci_lo": -0.18600773142341753,
+        "trip_ci_hi": -0.17183353072938976
+      },
+      "Trip NLL": {
+        "fold_mean": 6.1501208533549505,
+        "fold_std": 0.46075488991000413,
+        "n_folds": 2,
+        "trip_ci_lo": 5.862682037444329,
+        "trip_ci_hi": 6.47088688069293
+      },
+      "Top-1 Accuracy": {
+        "fold_mean": 0.9262098105649825,
+        "fold_std": 0.003856425058540159,
+        "n_folds": 2,
+        "trip_ci_lo": 0.9223110272890657,
+        "trip_ci_hi": 0.9298618314469741
+      }
+    },
+    "IRL-v3 (raw)": {
+      "Edge Jaccard": {
+        "fold_mean": 0.5723447622295257,
+        "fold_std": 0.010477119299020014,
+        "n_folds": 5,
+        "trip_ci_lo": 0.5598722251838398,
+        "trip_ci_hi": 0.5850413105387129
+      },
+      "Edge F1": {
+        "fold_mean": 0.654532354043973,
+        "fold_std": 0.008055025256858668,
+        "n_folds": 5,
+        "trip_ci_lo": 0.6430691443789256,
+        "trip_ci_hi": 0.6659295366490705
+      },
+      "Path Length Ratio": {
+        "fold_mean": 0.9286010990152092,
+        "fold_std": 0.008325622234868204,
+        "n_folds": 5,
+        "trip_ci_lo": 0.9233284558499372,
+        "trip_ci_hi": 0.9336142357084096
+      },
+      "Log-Likelihood": {
+        "fold_mean": -0.15779546009831832,
+        "fold_std": 0.0053222195894823375,
+        "n_folds": 5,
+        "trip_ci_lo": -0.16211568315618782,
+        "trip_ci_hi": -0.1535195891579081
+      },
+      "Trip NLL": {
+        "fold_mean": 5.499924212126528,
+        "fold_std": 0.26403742129835095,
+        "n_folds": 5,
+        "trip_ci_lo": 5.314768974131987,
+        "trip_ci_hi": 5.682726061579155
+      },
+      "Top-1 Accuracy": {
+        "fold_mean": 0.9347443173420535,
+        "fold_std": 0.002620318687036647,
+        "n_folds": 5,
+        "trip_ci_lo": 0.9324239901558127,
+        "trip_ci_hi": 0.9370200322797182
+      }
+    },
+    "IRL-v3 (calibrated)": {
+      "Edge Jaccard": {
+        "fold_mean": 0.5879110571835187,
+        "fold_std": 0.010835603067097358,
+        "n_folds": 5,
+        "trip_ci_lo": 0.5756571272905684,
+        "trip_ci_hi": 0.6008130278919135
+      },
+      "Edge F1": {
+        "fold_mean": 0.6686317339476048,
+        "fold_std": 0.010408887654865058,
+        "n_folds": 5,
+        "trip_ci_lo": 0.6573901513928646,
+        "trip_ci_hi": 0.6804271856216892
+      },
+      "Path Length Ratio": {
+        "fold_mean": 0.8992319317305727,
+        "fold_std": 0.008067166190259737,
+        "n_folds": 5,
+        "trip_ci_lo": 0.89437213070015,
+        "trip_ci_hi": 0.9041211698436147
+      },
+      "Log-Likelihood": {
+        "fold_mean": -0.15779546009831832,
+        "fold_std": 0.0053222195894823375,
+        "n_folds": 5,
+        "trip_ci_lo": -0.16211568315618782,
+        "trip_ci_hi": -0.1535195891579081
+      },
+      "Trip NLL": {
+        "fold_mean": 5.499924212126528,
+        "fold_std": 0.26403742129835095,
+        "n_folds": 5,
+        "trip_ci_lo": 5.314768974131987,
+        "trip_ci_hi": 5.682726061579155
+      },
+      "Top-1 Accuracy": {
+        "fold_mean": 0.9347443173420535,
+        "fold_std": 0.002620318687036647,
+        "n_folds": 5,
+        "trip_ci_lo": 0.9324239901558127,
+        "trip_ci_hi": 0.9370200322797182
+      }
+    }
+  },
+  "paired_tests": {
+    "IRL-v3 (raw) vs Dijkstra-Shortest": {
+      "Edge Jaccard": {
+        "mean_diff": 0.03379854599445378,
+        "p_value": 4.3886830691161636e-07,
+        "n": 3000
+      },
+      "Edge F1": {
+        "mean_diff": 0.024402171190292705,
+        "p_value": 7.45616031010717e-05,
+        "n": 3000
+      }
+    },
+    "IRL-v3 (calibrated) vs Dijkstra-Shortest": {
+      "Edge Jaccard": {
+        "mean_diff": 0.049364840948446745,
+        "p_value": 2.615940194076544e-25,
+        "n": 3000
+      },
+      "Edge F1": {
+        "mean_diff": 0.0385015510939245,
+        "p_value": 6.15662406565974e-20,
+        "n": 3000
+      }
+    },
+    "IRL-v3 (raw) vs Pop-Shortest": {
+      "Edge Jaccard": {
+        "mean_diff": -0.02171760656669016,
+        "p_value": 9.972310865233463e-06,
+        "n": 3000
+      },
+      "Edge F1": {
+        "mean_diff": -0.016314990282611675,
+        "p_value": 0.00023700793939554666,
+        "n": 3000
+      }
+    },
+    "IRL-v3 (calibrated) vs Pop-Shortest": {
+      "Edge Jaccard": {
+        "mean_diff": -0.006151311612697203,
+        "p_value": 0.16432089803864447,
+        "n": 3000
+      },
+      "Edge F1": {
+        "mean_diff": -0.0022156103789798755,
+        "p_value": 0.45301182101487125,
+        "n": 3000
+      }
+    },
+    "IRL-v3 (raw) vs IRL-v2 (raw)": {
+      "Edge Jaccard": {
+        "mean_diff": 0.041574301787553974,
+        "p_value": 1.3987619196010055e-08,
+        "n": 1200
+      },
+      "Edge F1": {
+        "mean_diff": 0.036664856862424856,
+        "p_value": 8.149899747713821e-08,
+        "n": 1200
+      }
+    },
+    "IRL-v2 (calibrated) vs Dijkstra-Shortest": {
+      "Edge Jaccard": {
+        "mean_diff": 0.025967081451518624,
+        "p_value": 4.872148521405497e-06,
+        "n": 1200
+      },
+      "Edge F1": {
+        "mean_diff": 0.01866855681652394,
+        "p_value": 0.00015060411039283554,
+        "n": 1200
+      }
+    }
+  }
+}

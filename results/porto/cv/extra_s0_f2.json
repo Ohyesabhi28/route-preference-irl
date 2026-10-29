@@ -1,0 +1,42 @@
+{
+  "seed": 0,
+  "fold": 2,
+  "summary": {
+    "Dijkstra-Shortest": {
+      "Edge Jaccard": 0.542341290139324,
+      "Edge F1": 0.6288977536283569,
+      "Path Length Ratio": 0.8869653582085113,
+      "Frechet (m)": 367.39099334420246
+    },
+    "Dijkstra-Fastest": {
+      "Edge Jaccard": 0.3867940078589144,
+      "Edge F1": 0.4824446463421909,
+      "Path Length Ratio": 1.0134356848487003,
+      "Frechet (m)": 513.3953207343058
+    },
+    "Pop-Shortest": {
+      "Edge Jaccard": 0.5861994058819107,
+      "Edge F1": 0.6600826915104053,
+      "Path Length Ratio": 0.9026435173945178,
+      "Frechet (m)": 361.8106262248022
+    },
+    "RL-Handcrafted": {
+      "Edge Jaccard": 0.5352919002382849,
+      "Edge F1": 0.6236964052488723,
+      "Path Length Ratio": 0.8935178038893798,
+      "Frechet (m)": 375.72924402895046
+    },
+    "IRL-v3 (raw)": {
+      "Edge Jaccard": 0.5711462772688207,
+      "Edge F1": 0.6527917237875361,
+      "Path Length Ratio": 0.9386681475559817,
+      "Frechet (m)": 382.86842327100703
+    },
+    "IRL-v3 (calibrated)": {
+      "Edge Jaccard": 0.5743289848308493,
+      "Edge F1": 0.6534371939301369,
+      "Path Length Ratio": 0.9125655525152467,
+      "Frechet (m)": 376.0093525223941
+    }
+  }
+}

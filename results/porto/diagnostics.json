@@ -1,0 +1,151 @@
+{
+  "n_trips": 300,
+  "weights": {
+    "length": -0.14101383885082808,
+    "speed_kph": -0.02284140507673705,
+    "travel_time": -1.2610694557908049,
+    "road_motorway": -0.6715524533275348,
+    "road_primary": -0.5555807939158237,
+    "road_residential": -0.4787253752532402,
+    "turn_straight": 0.15162500233956552,
+    "turn_slight": -0.37862302665101605,
+    "turn_sharp": -1.4788605981850993,
+    "num_lanes": 0.13984526530067637
+  },
+  "A_reward": {
+    "transitions": 14788,
+    "frac_positive_reward": 0.0,
+    "reward_min": -8.210350248017406,
+    "reward_max": -0.1475608936689027,
+    "reward_mean": -1.5079330364285877
+  },
+  "A_feature_stats": {
+    "length": {
+      "mean": 0.9041399664621205,
+      "std": 0.9399470295756275,
+      "max": 21.525846373158203
+    },
+    "speed_kph": {
+      "mean": 0.7145996387718241,
+      "std": 0.2746471204920443,
+      "max": 1.8
+    },
+    "travel_time": {
+      "mean": 0.167641028464197,
+      "std": 0.16581380272449642,
+      "max": 2.583101564778984
+    },
+    "road_motorway": {
+      "mean": 0.028296207104154123,
+      "std": 0.16581776674311152,
+      "max": 1.0
+    },
+    "road_primary": {
+      "mean": 0.23585189644792293,
+      "std": 0.424530068887754,
+      "max": 1.0
+    },
+    "road_residential": {
+      "mean": 0.7358518964479229,
+      "std": 0.4408785353608386,
+      "max": 1.0
+    },
+    "turn_straight": {
+      "mean": 0.0,
+      "std": 0.0,
+      "max": 0.0
+    },
+    "turn_slight": {
+      "mean": 0.0,
+      "std": 0.0,
+      "max": 0.0
+    },
+    "turn_sharp": {
+      "mean": 0.0,
+      "std": 0.0,
+      "max": 0.0
+    },
+    "num_lanes": {
+      "mean": 0.716360626128838,
+      "std": 0.3414765014969888,
+      "max": 2.5
+    }
+  },
+  "A_collinear_pairs_gt_0.8": [
+    [
+      "length",
+      "travel_time",
+      0.8099118739042729
+    ],
+    [
+      "road_primary",
+      "road_residential",
+      -0.9272618129213571
+    ]
+  ],
+  "A_value_iter_gap_150_vs_600": 155.4759747159103,
+  "B_overall": {
+    "J_irl": 0.5378225071078727,
+    "J_sp": 0.5337721935381673,
+    "J_irl_sp": 0.6376761147785506,
+    "same_as_sp": 0.44333333333333336,
+    "exp_over_sp_len": 1.1562218439334038,
+    "irl_over_sp_len": 1.0460958663573303
+  },
+  "B_by_length_tercile": [
+    {
+      "edges": [
+        9.0,
+        26.0
+      ],
+      "n": 109,
+      "J_irl": 0.6587051465321857,
+      "J_sp": 0.6530371722435613,
+      "same_as_sp": 0.5963302752293578
+    },
+    {
+      "edges": [
+        26.0,
+        37.0
+      ],
+      "n": 107,
+      "J_irl": 0.48136593844130693,
+      "J_sp": 0.4947146000945675,
+      "same_as_sp": 0.37383177570093457
+    },
+    {
+      "edges": [
+        37.0,
+        74.0
+      ],
+      "n": 102,
+      "J_irl": 0.4664703997553164,
+      "J_sp": 0.4342335616879516,
+      "same_as_sp": 0.35294117647058826
+    }
+  ],
+  "B_irl_wins_ties_losses": {
+    "win": 0.29,
+    "tie": 0.4533333333333333,
+    "loss": 0.25666666666666665
+  },
+  "C_oracle_best_of_irl_sp": 0.6296280778458577,
+  "C_experts_longer_than_sp_by": 0.15622184393340377,
+  "D_weight_surgery_jaccard": {
+    "full_learned": 0.5378225071078727,
+    "no_road_class": 0.457157417884225,
+    "no_turns": 0.5257924146264386,
+    "no_speed_lanes": 0.5110668254487981,
+    "no_travel_time": 0.49791280590546394,
+    "length_only": 0.5337721935381673,
+    "time_only": 0.5358996826804836
+  },
+  "D_length_only_vs_dijkstra_jaccard": 1.0,
+  "E_length_sweep_jaccard": {
+    "extra_length_penalty_0.0": 0.5378225071078727,
+    "extra_length_penalty_0.5": 0.5828310629703488,
+    "extra_length_penalty_1.0": 0.5803249663875488,
+    "extra_length_penalty_2.0": 0.5755686879150715,
+    "extra_length_penalty_4.0": 0.5480523793783787
+  }
+}

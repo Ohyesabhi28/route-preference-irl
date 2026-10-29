@@ -1,0 +1,28 @@
+{
+  "IRL (MaxEnt)": {
+    "Edge Jaccard": 0.5213915481791948,
+    "Edge F1": 0.6108861908292039,
+    "Path Length Ratio": 0.9235897658126088,
+    "Top-1 Accuracy": 0.9235421166306695,
+    "Top-3 Accuracy": 0.9992594878124036,
+    "Log-Likelihood": -0.1818661960819994
+  },
+  "Dijkstra-Shortest": {
+    "Edge Jaccard": 0.5406670901037635,
+    "Edge F1": 0.6358780829615567,
+    "Path Length Ratio": 0.8843097643653379
+  },
+  "Dijkstra-Fastest": {
+    "Edge Jaccard": 0.35743530502890153,
+    "Edge F1": 0.45440510618517427,
+    "Path Length Ratio": 1.0114112752519941
+  },
+  "Myopic-Classifier": {
+    "Edge Jaccard": 0.059011991507024,
+    "Edge F1": 0.09233550581349324,
+    "Path Length Ratio": 2.0974918985343423,
+    "Top-1 Accuracy": 0.8108608454180808,
+    "Top-3 Accuracy": 0.9966676951558161,
+    "Log-Likelihood": -0.43548641151178424
+  }
+}
