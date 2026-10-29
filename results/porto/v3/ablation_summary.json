@@ -1,0 +1,73 @@
+{
+  "full v3": {
+    "dropped": [],
+    "alpha": 0.5,
+    "Edge F1": 0.6821555852114187,
+    "Edge Jaccard": 0.6012365130877193,
+    "Trip NLL": 5.463642081339192,
+    "Top-1 Accuracy": 0.9373515506309086
+  },
+  "no_turn": {
+    "dropped": [
+      "turn_slight",
+      "turn_sharp"
+    ],
+    "alpha": 1.0,
+    "Edge F1": 0.6927137168046404,
+    "Edge Jaccard": 0.6133034679867224,
+    "Trip NLL": 7.239294294400338,
+    "Top-1 Accuracy": 0.9335942170392673,
+    "F1 change vs full": 0.01055813159322172,
+    "NLL change vs full": 1.7756522130611456
+  },
+  "no_familiarity": {
+    "dropped": [
+      "edge_familiarity"
+    ],
+    "alpha": 1.0,
+    "Edge F1": 0.6484484888747797,
+    "Edge Jaccard": 0.5627038123640099,
+    "Trip NLL": 6.059654562924,
+    "Top-1 Accuracy": 0.9305319993999376,
+    "F1 change vs full": -0.03370709633663904,
+    "NLL change vs full": 0.5960124815848076
+  },
+  "no_goal": {
+    "dropped": [
+      "away_from_goal"
+    ],
+    "alpha": 0.5,
+    "Edge F1": 0.6810950236451226,
+    "Edge Jaccard": 0.6006112643792139,
+    "Trip NLL": 5.499232753787899,
+    "Top-1 Accuracy": 0.9382421867390055,
+    "F1 change vs full": -0.001060561566296081,
+    "NLL change vs full": 0.035590672448706506
+  },
+  "no_roadclass": {
+    "dropped": [
+      "road_motorway",
+      "road_primary"
+    ],
+    "alpha": 0.5,
+    "Edge F1": 0.6828005262814877,
+    "Edge Jaccard": 0.6035682596008668,
+    "Trip NLL": 5.5166415216957745,
+    "Top-1 Accuracy": 0.9381286691320455,
+    "F1 change vs full": 0.0006449410700689606,
+    "NLL change vs full": 0.052999440356582106
+  },
+  "no_step": {
+    "dropped": [
+      "step"
+    ],
+    "alpha": 0.5,
+    "Edge F1": 0.665922144847556,
+    "Edge Jaccard": 0.5829776521215929,
+    "Trip NLL": 5.710755961940742,
+    "Top-1 Accuracy": 0.9354362571771947,
+    "F1 change vs full": -0.01623344036386276,
+    "NLL change vs full": 0.2471138806015496
+  },
+  "Dijkstra-Shortest F1": 0.6358780829615567
+}
