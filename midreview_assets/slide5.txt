@@ -1,0 +1,62 @@
+# ---------- 5 System design
+from pptx.oxml.ns import qn
+from lxml import etree
+def arrow(s, x1, y1, x2, y2, color=GREY, dash=False, head=True, w=1.5):
+    ln = s.shapes.add_connector(1, Inches(x1), Inches(y1), Inches(x2), Inches(y2))
+    ln.line.color.rgb = C(color); ln.line.width = Pt(w)
+    el = ln.line._get_or_add_ln()
+    if dash:
+        d = etree.SubElement(el, qn("a:prstDash")); d.set("val", "dash")
+    if head:
+        t = etree.SubElement(el, qn("a:tailEnd")); t.set("type", "triangle")
+    return ln
+def node(s, x, y, w, h, title, sub, fill, size=9):
+    box(s, x, y, w, h, fill, shape=MSO_SHAPE.ROUNDED_RECTANGLE)
+    text(s, x, y, w, h, [[(title, True)]] + ([sub] if sub else []), size, WHITE, False, PP_ALIGN.CENTER, MSO_ANCHOR.MIDDLE)
+def band(s, y, h, label):
+    box(s, .4, y, 9.2, h, "F4F7F8", "D5DCE4")
+    text(s, .45, y + .01, 6, .25, label, 9.5, TEAL, True)
+
+s = p.slides.add_slide(blank)
+header(s, 5, "System Design Diagram")
+# bands
+band(s, 1.0, 1.0, "1  DATA AND ENVIRONMENT")
+band(s, 2.05, 1.45, "2  RL CORE: MAXIMUM ENTROPY IRL TRAINING LOOP")
+band(s, 3.6, 1.3, "3  EVALUATION AND SERVING")
+# band 1 (y 1.27, h .62)
+y1, h1 = 1.27, .62
+node(s, .5, y1, 1.6, h1, "OSM road graph", "nodes, edges, features φ (10)", NAVY)
+node(s, 2.35, y1, 1.7, h1, "Porto taxi GPS", "ECML/PKDD 2015 trips", NAVY)
+node(s, 4.3, y1, 1.7, h1, "Map matching", "GPS to road edges (parallel)", NAVY)
+node(s, 6.15, y1, 1.7, h1, "Expert paths", "80/20 split by origin-dest", NAVY)
+node(s, 8.05, y1, 1.5, h1, "Synthetic drivers", "known w, for validation", GREY)
+arrow(s, 4.05, y1 + h1/2, 4.3, y1 + h1/2); arrow(s, 6.0, y1 + h1/2, 6.15, y1 + h1/2)
+arrow(s, 8.05, y1 + h1/2, 7.85, y1 + h1/2, GREY, True)
+# band 2 (y 2.33, h .7)
+y2, h2 = 2.33, .7
+node(s, .5, y2, 1.6, h2, "Reward", "R(s,a) = w · φ(s,a)", TEAL)
+node(s, 2.35, y2, 1.7, h2, "Soft value iteration", "backward from goal gives π(a|s)", TEAL)
+node(s, 4.3, y2, 1.7, h2, "Policy feature counts", "expected visits under π", TEAL)
+node(s, 6.15, y2, 1.7, h2, "Gradient", "expert counts − policy counts", TEAL)
+node(s, 8.05, y2, 1.5, h2, "L-BFGS update", "new w (L2 = 1e-3)", TEAL)
+for a, b in [(2.1, 2.35), (4.05, 4.3), (6.0, 6.15), (7.85, 8.05)]:
+    arrow(s, a, y2 + h2/2, b, y2 + h2/2)
+arrow(s, 1.3, y1 + h1, 1.3, y2)          # graph -> reward
+arrow(s, 7.0, y1 + h1, 7.0, y2)          # expert paths -> gradient
+# loop back
+arrow(s, 8.8, y2 + h2, 8.8, 3.25, ORG, head=False, w=2)
+arrow(s, 8.8, 3.25, 1.3, 3.25, ORG, head=False, w=2)
+arrow(s, 1.3, 3.25, 1.3, y2 + h2, ORG, w=2)
+text(s, 2.2, 3.05, 4.4, .2, "repeat until converged (about 35 iterations)", 8.5, ORG, True, PP_ALIGN.CENTER)
+# band 3
+arrow(s, 5.1, 3.25, 5.1, 3.9, TEAL, w=2)
+text(s, 5.15, 3.3, 1.3, .2, "learned w*", 8.5, TEAL, True)
+node(s, .5, 3.88, 3.0, .45, "Route generation: IRL policy", None, TEAL)
+node(s, .5, 4.4, 3.0, .45, "Baselines: Dijkstra, myopic classifier", None, GREY)
+node(s, 4.0, 3.95, 2.3, .8, "Metrics", "top-1/3, log-lik, edge F1, Jaccard, length ratio", NAVY)
+node(s, 6.8, 3.95, 2.75, .8, "Flask REST API + dashboard", "pick start/end, compare routes on a map", ORG)
+arrow(s, 3.5, 4.1, 4.0, 4.3); arrow(s, 3.5, 4.62, 4.0, 4.4)
+arrow(s, 6.3, 4.35, 6.8, 4.35)
+impact(s, "Raw GPS to interactive route planner runs end to end; the loop learns the reward from data.")
+notes(s, "Trace left to right. Band 1 prepares the environment and expert demonstrations (real Porto, or synthetic with known weights as a check). Band 2 is the learning loop: reward from weights, soft value iteration gives the policy, compare its feature counts with the experts', update weights, repeat. Band 3 uses the learned weights to generate routes, scores them against baselines, and serves them through the Flask API to the dashboard.")
+

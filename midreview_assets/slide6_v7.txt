@@ -1,0 +1,65 @@
+# ---------- 5 System design
+def mini(s, x, y, w, h, icon, title, sub, accent=INK, ts=9.5):
+    box(s, x, y, w, h, WHITE, accent, lw=1)
+    isz = .3
+    s.shapes.add_picture("midreview_assets/icons/%s.png" % icon, Inches(x + w / 2 - isz / 2), Inches(y + .04), width=Inches(isz))
+    text(s, x, y + .33, w, .22, title, ts, accent, True, PP_ALIGN.CENTER, font=SERIF)
+    if sub:
+        text(s, x, y + .54, w, .2, sub, 8, MUTED, False, PP_ALIGN.CENTER)
+
+
+def layer(s, y, h, num, name, sub, accent, tint):
+    box(s, .5, y, 9, h, tint)
+    box(s, .5, y, 1.5, h, accent)
+    text(s, .5, y + h / 2 - .45, 1.5, .5, num, 26, WHITE, False, PP_ALIGN.CENTER, font=SERIF, after=0)
+    text(s, .5, y + h / 2 + .02, 1.5, .28, name, 12.5, WHITE, True, PP_ALIGN.CENTER, font=SERIF, after=0)
+    text(s, .5, y + h / 2 + .3, 1.5, .22, sub, 9, "EADCDD" if accent == ACC else "DDE6EE" if accent == SLATE else "DADADA", False, PP_ALIGN.CENTER, italic=True, after=0)
+
+
+s = new_slide()
+header(s, 6, "System design")
+layer(s, .98, 1.14, "3", "Application", "online", SLATE, "E4EAF0")
+layer(s, 2.45, 1.3, "2", "Learning", "offline", ACC, "F3E6E4")
+layer(s, 4.08, 1.12, "1", "Data", "offline", INK, "EFEBE2")
+GX = [2.3 + i * 1.45 for i in range(5)]
+W = 1.15
+H = .78
+# ---- layer 3: application
+ya = 1.17
+mini(s, 2.3, ya, 1.9, H, "monitor", "Web dashboard", "pick start and end", SLATE)
+mini(s, 4.9, ya, 1.9, H, "code", "Flask REST API", "/api/route", SLATE)
+mini(s, 7.9, ya, 1.5, H, "fork", "Route planner", "IRL + baselines", SLATE)
+arrow(s, 4.2, ya + .4, 4.9, ya + .4, SLATE, both=True, w=1.5)
+arrow(s, 6.8, ya + .4, 7.9, ya + .4, SLATE, both=True, w=1.5)
+# ---- layer 2: learning
+yl = 2.6
+mini(s, GX[0], yl, W, H, "target", "Reward", "w · φ(s,a)", ACC)
+mini(s, GX[1], yl, W, H, "layers", "Soft value iter.", "policy π(a|s)", ACC, 9)
+mini(s, GX[2], yl, W, H, "gradient", "Gradient", "expert − policy", ACC)
+mini(s, GX[3], yl, W, H, "cycle", "L-BFGS", "update w", ACC)
+mini(s, GX[4], yl, W, H, "db_acc", "Weights w*", "saved model", ACC)
+for i in range(4):
+    arrow(s, GX[i] + W, yl + .4, GX[i + 1], yl + .4, MUTED, w=1.5)
+lyy = 3.55
+arrow(s, GX[3] + W / 2, yl + H, GX[3] + W / 2, lyy, ACC, head=False, w=1.3)
+arrow(s, GX[3] + W / 2, lyy, GX[0] + W / 2, lyy, ACC, head=False, w=1.3)
+arrow(s, GX[0] + W / 2, lyy, GX[0] + W / 2, yl + H, ACC, w=1.3)
+text(s, 3.4, lyy - .01, 3.2, .2, "repeat about 35 times", 8.5, ACC, False, PP_ALIGN.CENTER, italic=True, after=0)
+# ---- layer 1: data
+yd = 4.25
+mini(s, GX[0], yd, W, H, "pin_ink", "Porto GPS", "+ OSM roads", INK)
+mini(s, GX[1], yd, W, H, "snap_ink", "Map matching", "GPS to edges", INK, 9)
+mini(s, GX[2], yd, W, H, "route_ink", "Expert routes", "80 / 20 split", INK, 9)
+mini(s, GX[3], yd, W, H, "dice", "Synthetic", "optional", MUTED)
+arrow(s, GX[0] + W, yd + .4, GX[1], yd + .4, MUTED, w=1.5)
+arrow(s, GX[1] + W, yd + .4, GX[2], yd + .4, MUTED, w=1.5)
+arrow(s, GX[3], yd + .4, GX[2] + W, yd + .4, MUTED, w=1.2)
+# ---- arrows between layers (data flows upward)
+arrow(s, GX[2] + W / 2, yd, GX[2] + W / 2, yl + H + .0 + .0, MUTED, w=1.6)
+text(s, GX[2] + W / 2 + .08, 3.82, 1.4, .2, "expert routes", 8.5, MUTED, False, italic=True, after=0)
+arrow(s, GX[0] + W / 2, yd, GX[0] + W / 2, 3.78, MUTED, w=1.6, head=False)
+text(s, GX[0] + W / 2 + .08, 3.9, 1.6, .2, "road features φ", 8.5, MUTED, False, italic=True, after=0)
+arrow(s, GX[4] + W / 2, yl, GX[4] + W / 2, ya + H, SLATE, w=1.8)
+text(s, GX[4] + W / 2 + .08, 2.17, .9, .2, "w*", 9, SLATE, True, italic=True, after=0)
+notes(s, "Read it bottom to top. Layer 1, data: Porto GPS trips are map-matched onto the OSM road graph into expert routes (80/20 split by origin-destination pair); synthetic drivers with a known reward are an optional check. Layer 2, learning: reward w.phi, soft value iteration gives the policy, the gradient compares policy and expert feature counts, L-BFGS updates w, repeat about 35 times; the saved weights w* are tested on held-out trips. Layer 3, application: the dashboard calls the Flask API, which asks the route planner for the IRL route and the Dijkstra and classifier baselines using w* and the road graph.")
+

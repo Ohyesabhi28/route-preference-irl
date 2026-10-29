@@ -1,0 +1,57 @@
+# ---------- 5 System design
+def node(s, cx, y, icon, title, sub, accent=INK, w=1.45):
+    isz = .42
+    s.shapes.add_picture("midreview_assets/icons/%s.png" % icon, Inches(cx - isz / 2), Inches(y), width=Inches(isz))
+    text(s, cx - w / 2, y + .47, w, .24, title, 10.5, accent, True, PP_ALIGN.CENTER, font=SERIF)
+    text(s, cx - w / 2, y + .7, w, .22, sub, 8.5, MUTED, False, PP_ALIGN.CENTER)
+
+
+s = new_slide()
+header(s, 6, "System design")
+CX = [2.5, 4.1, 5.7, 7.3, 8.9]
+# stage labels and separators
+hline(s, .5, 2.2, 9, LINE)
+hline(s, .5, 3.75, 9, LINE)
+for lab, yy in [("Data", 1.45), ("Learning", 2.85), ("Serving", 4.3)]:
+    text(s, .5, yy - .15, 1.2, .3, lab, 13, MUTED, False, font=SERIF, italic=True)
+# row 1
+r1 = 1.12
+node(s, CX[0], r1, "graph_ink", "OSM road graph", "10 road features")
+node(s, CX[1], r1, "pin_ink", "Porto taxi GPS", "ECML/PKDD 2015")
+node(s, CX[2], r1, "snap_ink", "Map matching", "HMM to road edges")
+node(s, CX[3], r1, "route_ink", "Expert paths", "80/20 split")
+node(s, CX[4], r1, "dice", "Synthetic drivers", "known reward", MUTED)
+ay = r1 + .21
+arrow(s, CX[1] + .3, ay, CX[2] - .3, ay)
+arrow(s, CX[2] + .3, ay, CX[3] - .3, ay)
+arrow(s, CX[4] - .3, ay, CX[3] + .3, ay, MUTED, True)
+# loop outline
+box(s, 1.75, 2.3, 7.75, 1.38, None, ACC, shape=MSO_SHAPE.ROUNDED_RECTANGLE, lw=1.25)
+text(s, 6.4, 2.2, 3.0, .24, "repeat until converged, about 35 iterations", 8.5, ACC, False, PP_ALIGN.CENTER, italic=True)
+s.shapes[-1].fill.solid()
+s.shapes[-1].fill.fore_color.rgb = C(PAPER)
+r2 = 2.43
+node(s, CX[0], r2, "target", "Reward", "R = w · φ(s,a)", ACC)
+node(s, CX[1], r2, "layers", "Soft value iteration", "policy π(a|s)", ACC)
+node(s, CX[2], r2, "bars", "Feature counts", "under current π", ACC)
+node(s, CX[3], r2, "gradient", "Gradient", "expert − policy", ACC)
+node(s, CX[4], r2, "cycle", "L-BFGS update", "new weights w", ACC)
+by = r2 + .21
+for i in range(4):
+    arrow(s, CX[i] + .3, by, CX[i + 1] - .3, by)
+arrow(s, CX[0], r1 + .98, CX[0], r2 - .02, MUTED)
+arrow(s, CX[3], r1 + .98, CX[3], r2 - .02, MUTED)
+# row 3
+r3 = 3.93
+arrow(s, CX[2], 3.68, CX[2], r3 - .03, SLATE, w=1.5)
+text(s, CX[2] + .08, 3.7, 1.2, .22, "learned w*", 8.5, SLATE, False, italic=True)
+node(s, CX[0], r3, "monitor", "Web dashboard", "Leaflet map", SLATE)
+node(s, CX[1], r3, "code", "Flask REST API", "/api/route", SLATE)
+node(s, CX[2], r3, "fork", "Route generation", "IRL + Dijkstra", SLATE)
+node(s, CX[3], r3, "check", "Evaluation", "F1, top-k, log-lik", SLATE)
+cy = r3 + .21
+arrow(s, CX[0] + .3, cy, CX[1] - .3, cy, SLATE, both=True)
+arrow(s, CX[1] + .3, cy, CX[2] - .3, cy, SLATE, both=True)
+arrow(s, CX[2] + .3, cy, CX[3] - .3, cy, SLATE)
+notes(s, "Trace top to bottom. Data: the road graph and Porto taxi trips are map-matched into expert paths (synthetic drivers with a known reward are used as a check). Learning: reward from weights, soft value iteration gives the policy, compare its feature counts with the experts', update weights, repeat. Serving: the dashboard talks to the Flask API, which asks route generation for the IRL route and the baselines (Dijkstra shortest and fastest, myopic classifier); evaluation scores them on held-out trips.")
+

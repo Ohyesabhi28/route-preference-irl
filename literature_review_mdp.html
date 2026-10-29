@@ -1,0 +1,1586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Literature Review, Comparative MDP Formulations &amp; Project Positioning</title>
+  <meta name="description" content="Literature review and MDP formulations for route choice modelling and inverse reinforcement learning, positioned against our Porto taxi MaxEnt IRL project.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
+  
+  <!-- MathJax for rendering math formulas -->
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+  <style>
+    :root {
+      --bg: #090d16;
+      --bg-surface: #0f172a;
+      --bg-card: #141f36;
+      --bg-card-hover: #1b2949;
+      --border: rgba(99, 132, 255, 0.18);
+      --border-accent: rgba(99, 132, 255, 0.45);
+      
+      --accent-blue: #38bdf8;
+      --accent-indigo: #818cf8;
+      --accent-purple: #c084fc;
+      --accent-emerald: #34d399;
+      --accent-amber: #fbbf24;
+      --accent-rose: #fb7185;
+      
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      
+      --badge-bg-blue: rgba(56, 189, 248, 0.12);
+      --badge-border-blue: rgba(56, 189, 248, 0.3);
+      --badge-bg-green: rgba(52, 211, 153, 0.12);
+      --badge-border-green: rgba(52, 211, 153, 0.3);
+      --badge-bg-amber: rgba(251, 191, 36, 0.12);
+      --badge-border-amber: rgba(251, 191, 36, 0.3);
+      --badge-bg-purple: rgba(192, 132, 252, 0.12);
+      --badge-border-purple: rgba(192, 132, 252, 0.3);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--bg);
+      color: var(--text-main);
+      line-height: 1.6;
+      padding-bottom: 5rem;
+      background-image: 
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(56, 189, 248, 0.15), transparent),
+        radial-gradient(ellipse 60% 40% at 90% 40%, rgba(129, 140, 248, 0.08), transparent);
+      background-attachment: fixed;
+    }
+
+    .container {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 2.5rem 2rem;
+    }
+
+    /* Top Sticky Navigation */
+    .top-nav {
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      backdrop-filter: blur(16px);
+      background: rgba(9, 13, 22, 0.85);
+      border-bottom: 1px solid var(--border);
+      padding: 0.85rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .nav-brand {
+      font-weight: 800;
+      font-size: 1.05rem;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, var(--accent-blue), var(--accent-indigo));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 1.25rem;
+      align-items: center;
+    }
+
+    .nav-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 600;
+      transition: all 0.2s ease;
+      padding: 0.35rem 0.75rem;
+      border-radius: 8px;
+    }
+
+    .nav-links a:hover {
+      color: var(--text-main);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    /* Header Section */
+    .header-box {
+      margin-bottom: 3.5rem;
+      position: relative;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--accent-blue);
+      background: var(--badge-bg-blue);
+      border: 1px solid var(--badge-border-blue);
+      padding: 0.35rem 0.85rem;
+      border-radius: 999px;
+      margin-bottom: 1.2rem;
+    }
+
+    h1.main-title {
+      font-size: clamp(2rem, 3.5vw, 3rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.15;
+      margin-bottom: 1rem;
+      background: linear-gradient(135deg, #ffffff 30%, #94a3b8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    p.lead-text {
+      font-size: 1.1rem;
+      color: var(--text-muted);
+      max-width: 950px;
+      font-weight: 400;
+      line-height: 1.7;
+    }
+
+    /* Key stats grid */
+    .stats-bar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1.2rem;
+      margin: 2.5rem 0;
+    }
+
+    .stat-pill {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 1.2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+      transition: transform 0.2s, border-color 0.2s;
+    }
+
+    .stat-pill:hover {
+      transform: translateY(-2px);
+      border-color: var(--border-accent);
+    }
+
+    .stat-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-dim);
+    }
+
+    .stat-val {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .stat-note {
+      font-size: 0.78rem;
+      color: var(--accent-emerald);
+    }
+
+    /* Controls Bar */
+    .table-controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      padding: 1rem 1.5rem;
+      border-radius: 14px;
+      margin-bottom: 1.5rem;
+    }
+
+    .search-input {
+      background: rgba(9, 13, 22, 0.7);
+      border: 1px solid var(--border);
+      color: var(--text-main);
+      padding: 0.6rem 1rem;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      min-width: 320px;
+      outline: none;
+      transition: border-color 0.2s;
+      font-family: inherit;
+    }
+
+    .search-input:focus {
+      border-color: var(--accent-blue);
+    }
+
+    .filter-tags {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .filter-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 0.4rem 0.85rem;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .filter-btn:hover, .filter-btn.active {
+      background: var(--accent-blue);
+      color: #090d16;
+      border-color: var(--accent-blue);
+      font-weight: 700;
+    }
+
+    /* Master Table Container */
+    .table-wrapper {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow-x: auto;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+      margin-bottom: 4rem;
+    }
+
+    table.master-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.88rem;
+    }
+
+    table.master-table th {
+      background: #0d1424;
+      color: var(--accent-blue);
+      font-weight: 700;
+      text-transform: uppercase;
+      font-size: 0.72rem;
+      letter-spacing: 0.08em;
+      padding: 1.1rem 1.25rem;
+      border-bottom: 2px solid var(--border);
+      white-space: nowrap;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    table.master-table td {
+      padding: 1.2rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+      color: var(--text-muted);
+      line-height: 1.55;
+    }
+
+    table.master-table tr:hover td {
+      background: rgba(56, 189, 248, 0.02);
+      color: var(--text-main);
+    }
+
+    /* Highlighting our row */
+    tr.our-work-row {
+      background: rgba(52, 211, 153, 0.04);
+      position: relative;
+    }
+
+    tr.our-work-row td {
+      border-top: 1.5px solid rgba(52, 211, 153, 0.4);
+      border-bottom: 1.5px solid rgba(52, 211, 153, 0.4);
+      color: var(--text-main);
+    }
+
+    tr.our-work-row td:first-child {
+      border-left: 4px solid var(--accent-emerald);
+    }
+
+    /* Badges & typography inside table */
+    .paper-title {
+      font-weight: 700;
+      font-size: 0.95rem;
+      color: var(--text-main);
+      display: block;
+      margin-bottom: 0.25rem;
+    }
+
+    .authors {
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      display: block;
+      margin-bottom: 0.5rem;
+    }
+
+    .venue-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 0.25rem 0.6rem;
+      border-radius: 6px;
+      margin-top: 0.2rem;
+    }
+
+    .venue-aaai { background: rgba(129, 140, 248, 0.15); color: var(--accent-indigo); border: 1px solid rgba(129, 140, 248, 0.3); }
+    .venue-kdd  { background: rgba(56, 189, 248, 0.15); color: var(--accent-blue); border: 1px solid rgba(56, 189, 248, 0.3); }
+    .venue-ieee { background: rgba(192, 132, 252, 0.15); color: var(--accent-purple); border: 1px solid rgba(192, 132, 252, 0.3); }
+    .venue-trc  { background: rgba(251, 191, 36, 0.15); color: var(--accent-amber); border: 1px solid rgba(251, 191, 36, 0.3); }
+    .venue-classic { background: rgba(148, 163, 184, 0.15); color: var(--text-muted); border: 1px solid rgba(148, 163, 184, 0.3); }
+    .venue-ours { background: rgba(52, 211, 153, 0.15); color: var(--accent-emerald); border: 1px solid rgba(52, 211, 153, 0.35); font-weight: 700; }
+
+    .dataset-pill {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.8rem;
+    }
+
+    .dataset-prop {
+      color: var(--accent-rose);
+      font-weight: 600;
+      font-size: 0.72rem;
+      display: inline-block;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .dataset-open {
+      color: var(--accent-emerald);
+      font-weight: 600;
+      font-size: 0.72rem;
+      display: inline-block;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .mdp-tag {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      background: #090d16;
+      border: 1px solid var(--border);
+      padding: 0.35rem 0.55rem;
+      border-radius: 6px;
+      margin: 0.2rem 0;
+      display: block;
+      color: #93c5fd;
+    }
+
+    .limitation-box {
+      background: rgba(251, 113, 133, 0.06);
+      border-left: 3px solid var(--accent-rose);
+      padding: 0.55rem 0.75rem;
+      border-radius: 0 6px 6px 0;
+      font-size: 0.8rem;
+      color: #fca5a5;
+    }
+
+    .advantage-box {
+      background: rgba(52, 211, 153, 0.08);
+      border-left: 3px solid var(--accent-emerald);
+      padding: 0.55rem 0.75rem;
+      border-radius: 0 6px 6px 0;
+      font-size: 0.8rem;
+      color: #a7f3d0;
+      font-weight: 500;
+    }
+
+    /* Section Headers */
+    .section-head {
+      margin: 4.5rem 0 2rem;
+    }
+
+    .section-head h2 {
+      font-size: 1.9rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .section-head p {
+      color: var(--text-muted);
+      font-size: 1rem;
+      margin-top: 0.5rem;
+      max-width: 900px;
+    }
+
+    /* Dedicated MDP Deep-Dive Cards */
+    .mdp-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(440px, 1fr));
+      gap: 1.75rem;
+      margin-bottom: 4rem;
+    }
+
+    .mdp-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.75rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transition: all 0.25s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .mdp-card:hover {
+      border-color: var(--border-accent);
+      background: var(--bg-card-hover);
+      transform: translateY(-3px);
+      box-shadow: 0 15px 30px rgba(0, 0, 0, 0.35);
+    }
+
+    .mdp-card.highlight {
+      border: 1.5px solid var(--accent-emerald);
+      background: linear-gradient(180deg, rgba(52, 211, 153, 0.07) 0%, rgba(20, 31, 54, 0.95) 100%);
+    }
+
+    .mdp-card-header {
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 1rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .mdp-card-title {
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .mdp-card-cite {
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      font-family: 'JetBrains Mono', monospace;
+      margin-top: 0.25rem;
+    }
+
+    .mdp-tuple {
+      background: #090d16;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82rem;
+      color: var(--accent-blue);
+      margin-bottom: 1.2rem;
+    }
+
+    .mdp-breakdown {
+      display: flex;
+      flex-direction: column;
+      gap: 0.7rem;
+      font-size: 0.84rem;
+    }
+
+    .mdp-item {
+      display: flex;
+      gap: 0.75rem;
+      align-items: flex-start;
+    }
+
+    .mdp-symbol {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      color: var(--accent-amber);
+      background: rgba(251, 191, 36, 0.1);
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.78rem;
+      min-width: 32px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+
+    .mdp-desc {
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .mdp-desc strong {
+      color: var(--text-main);
+    }
+
+    /* Uniqueness Breakthrough Grid */
+    .uniqueness-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 4rem;
+    }
+
+    .feature-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.75rem;
+      position: relative;
+      overflow: hidden;
+      transition: all 0.25s ease;
+    }
+
+    .feature-card:hover {
+      border-color: var(--accent-emerald);
+      transform: translateY(-3px);
+    }
+
+    .feature-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: rgba(52, 211, 153, 0.15);
+      border: 1px solid rgba(52, 211, 153, 0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.4rem;
+      color: var(--accent-emerald);
+      margin-bottom: 1.2rem;
+    }
+
+    .feature-card h3 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--text-main);
+      margin-bottom: 0.6rem;
+    }
+
+    .feature-card p {
+      font-size: 0.88rem;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    .feature-tag {
+      display: inline-block;
+      margin-top: 1rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.74rem;
+      font-weight: 600;
+      color: var(--accent-emerald);
+      background: rgba(52, 211, 153, 0.1);
+      padding: 0.25rem 0.6rem;
+      border-radius: 6px;
+    }
+
+    /* Synthesis Comparison Matrix */
+    .radar-summary {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 2rem;
+      margin-bottom: 4rem;
+    }
+
+    .summary-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.86rem;
+    }
+
+    .summary-table th {
+      padding: 0.85rem 1rem;
+      text-align: center;
+      font-weight: 700;
+      border-bottom: 2px solid var(--border);
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .summary-table th:first-child {
+      text-align: left;
+    }
+
+    .summary-table td {
+      padding: 0.9rem 1rem;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-muted);
+    }
+
+    .summary-table td:first-child {
+      text-align: left;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+
+    .check {
+      color: var(--accent-emerald);
+      font-weight: 800;
+      font-size: 1.1rem;
+    }
+
+    .cross {
+      color: var(--accent-rose);
+      font-weight: 800;
+      font-size: 1rem;
+      opacity: 0.6;
+    }
+
+    .partial {
+      color: var(--accent-amber);
+      font-weight: 700;
+      font-size: 0.85rem;
+    }
+
+    /* Proposed Difference Callout Banner */
+    .callout-banner {
+      background: linear-gradient(135deg, rgba(20, 31, 54, 0.9) 0%, rgba(15, 23, 42, 0.95) 100%);
+      border: 2px solid var(--accent-emerald);
+      border-radius: 20px;
+      padding: 2.25rem;
+      position: relative;
+      box-shadow: 0 20px 40px rgba(52, 211, 153, 0.08);
+      margin-bottom: 4rem;
+    }
+
+    .callout-header {
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+      margin-bottom: 1rem;
+    }
+
+    .callout-header h3 {
+      font-size: 1.4rem;
+      font-weight: 800;
+      color: var(--accent-emerald);
+    }
+
+    .callout-body {
+      font-size: 1.02rem;
+      color: var(--text-main);
+      line-height: 1.7;
+    }
+
+    .callout-body strong {
+      color: var(--accent-blue);
+    }
+
+    .callout-sub {
+      margin-top: 1.25rem;
+      padding-top: 1.25rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      font-size: 0.88rem;
+      font-style: italic;
+      color: var(--text-dim);
+    }
+
+    /* Print & Responsive */
+    @media (max-width: 1024px) {
+      .mdp-grid, .uniqueness-grid {
+        grid-template-columns: 1fr;
+      }
+      .table-controls {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .search-input {
+        min-width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Sticky Navigation -->
+  <nav class="top-nav">
+    <div class="nav-brand">
+      <span>🗺️</span> Route Preference IRL · Benchmark &amp; Literature Review
+    </div>
+    <div class="nav-links">
+      <a href="#table-section">Comparative Table</a>
+      <a href="#diff-section">How We Differ</a>
+      <a href="#mdp-section">MDP Formulations</a>
+      <a href="#uniqueness-section">Contribution</a>
+      <a href="#matrix-section">Comparison Matrix</a>
+      <a href="presentation.html" target="_blank" style="color:var(--accent-emerald); border: 1px solid rgba(52,211,153,0.3);">Launch Slide Deck ↗</a>
+    </div>
+  </nav>
+
+  <div class="container">
+
+    <!-- Header Box -->
+    <header class="header-box">
+      <div class="eyebrow">
+        <span>Academic Survey &amp; Systematic Literature Review</span>
+      </div>
+      <h1 class="main-title">Existing Work, Gaps &amp; How This Project Fits</h1>
+      <p class="lead-text">
+        A comparative review of route-choice modelling and inverse reinforcement learning, with the <strong>Markov Decision Process (MDP)</strong> formulation of each approach next to ours: an <strong>edge-state Maximum Entropy IRL</strong> pipeline trained on real Porto taxi trips. Only works we could cite precisely are included; please verify each reference against the original before submission.
+      </p>
+
+      <!-- Stats Bar -->
+      <div class="stats-bar">
+        <div class="stat-pill">
+          <span class="stat-label">Works Reviewed</span>
+          <span class="stat-val">8 + Ours</span>
+          <span class="stat-note">AAAI · UbiComp · ICML ×2 · NIPS-W · SIGSPATIAL · classics</span>
+        </div>
+        <div class="stat-pill">
+          <span class="stat-label">Porto Trips Used</span>
+          <span class="stat-val">3,000</span>
+          <span class="stat-note">HMM map-matched (7,528 tried, 40% matched)</span>
+        </div>
+        <div class="stat-pill">
+          <span class="stat-label">Our Edge F1 vs Shortest</span>
+          <span class="stat-val">0.682 vs 0.636</span>
+          <span class="stat-note">600 held-out trips · p = 2.7e-5 · CV: 0.669 vs 0.630</span>
+        </div>
+        <div class="stat-pill">
+          <span class="stat-label">State</span>
+          <span class="stat-val">Incoming edge</span>
+          <span class="stat-note">\(\mathcal{S} = E\), \(\gamma = 1\), horizon \(H = 80\)</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Table Section -->
+    <section id="table-section">
+      <div class="table-controls">
+        <input type="text" id="tableSearch" class="search-input" placeholder="🔍 Filter papers, venues, datasets, or keywords...">
+        <div class="filter-tags">
+          <button class="filter-btn active" data-filter="all">All Works</button>
+          <button class="filter-btn" data-filter="classic">Classical Baselines</button>
+          <button class="filter-btn" data-filter="maxent">Foundational &amp; MaxEnt IRL</button>
+          <button class="filter-btn" data-filter="deep">Deep IRL</button>
+          <button class="filter-btn" data-filter="ours">This Project</button>
+        </div>
+      </div>
+
+      <div class="table-wrapper">
+        <table class="master-table" id="masterTable">
+          <thead>
+            <tr>
+              <th style="min-width: 220px;">Paper / Product &amp; Citation</th>
+              <th style="min-width: 170px;">Published Venue &amp; Year</th>
+              <th style="min-width: 230px;">Dataset Details &amp; Scope</th>
+              <th style="min-width: 230px;">Core Methodology (What It Does)</th>
+              <th style="min-width: 250px;">MDP Formalization (\(\mathcal{S}, \mathcal{A}, \mathcal{P}, \mathcal{R}\))</th>
+              <th style="min-width: 240px;">Remaining Gaps &amp; Limitations</th>
+              <th style="min-width: 300px;">How This Project Differs</th>
+            </tr>
+          </thead>
+          <tbody>
+
+            <tr data-category="maxent">
+              <td>
+                <span class="paper-title">Maximum Entropy Inverse Reinforcement Learning</span>
+                <span class="authors">Brian D. Ziebart, Andrew L. Maas, J. Andrew Bagnell, Anind K. Dey</span>
+                <span class="venue-badge venue-aaai">AAAI 2008</span>
+              </td>
+              <td>
+                <strong>AAAI-08</strong> — 23rd AAAI Conference on Artificial Intelligence<br>Chicago, USA, July 2008<br><em>AAAI Press, pp. 1433–1438</em><br><small style="color:var(--text-dim);">Top AI conference (core venue for IRL)</small>
+              </td>
+              <td>
+                <div class="dataset-pill">
+                  <strong>Pittsburgh taxi GPS</strong><br>
+                  <span class="dataset-prop">Not publicly released</span><br>
+                  • GPS from 25 taxi drivers<br>
+                  • Road network of roughly 300k segments<br>
+                  • Figures per the paper; verify before quoting
+                </div>
+              </td>
+              <td>
+                Learns a linear route-cost reward from driver GPS using <strong>maximum-entropy IRL</strong>: a distribution over whole paths that matches expert feature counts, avoiding the label bias of per-decision models.
+              </td>
+              <td>
+                <span class="mdp-tag">\(\mathcal{S}\): Road segments / junctions</span>
+                <span class="mdp-tag">\(\mathcal{A}\): Next adjacent road segment</span>
+                <span class="mdp-tag">\(\mathcal{P}\): Deterministic graph adjacency</span>
+                <span class="mdp-tag">\(\mathcal{R}\): Linear \(\theta^T f\) (road type, speed, lanes, turn types)</span>
+                <span class="mdp-tag">Obj: \(P(\tau \mid \theta) = \frac{1}{Z(\theta)} e^{\theta^T f(\tau)}\)</span>
+              </td>
+              <td>
+                <div class="limitation-box">
+                  <strong>Private data</strong> and a hand-built feature set; results cannot be reproduced. Single linear reward for all drivers; no statistical comparison against strong simple baselines.
+                </div>
+              </td>
+              <td><div class="advantage-box">Same algorithm family. We differ by (1) <strong>public data</strong> (Porto taxis) so results are reproducible, (2) putting the <strong>incoming edge in the state</strong>, (3) an <strong>identifiable 11-feature set</strong> with goal-direction and a familiarity feature, (4) <strong>CIs, paired tests, CV</strong> against strong baselines. <em>They are better</em>: original method, much larger road network.</div></td>
+            </tr>
+
+            <tr data-category="maxent">
+              <td>
+                <span class="paper-title">Apprenticeship Learning via Inverse Reinforcement Learning</span>
+                <span class="authors">Pieter Abbeel, Andrew Y. Ng (building on Ng &amp; Russell, 2000)</span>
+                <span class="venue-badge venue-aaai">ICML 2004</span>
+              </td>
+              <td>
+                <strong>ICML 2004</strong> — 21st Intl. Conference on Machine Learning<br>Banff, Canada, July 2004<br><em>Precursor: Ng &amp; Russell, ICML 2000 (Stanford), pp. 663–670</em><br><small style="color:var(--text-dim);">Top ML conference</small>
+              </td>
+              <td>
+                <div class="dataset-pill">
+                  <strong>Simulated gridworld &amp; driving</strong><br>
+                  <span class="dataset-open">Synthetic benchmarks</span><br>
+                  • Gridworld experiments<br>
+                  • Simulated car-driving domain<br>
+                  • Feature-expectation matching
+                </div>
+              </td>
+              <td>
+                Recovers a reward (or a policy of comparable performance) by <strong>matching expert feature expectations</strong>. IRL is ill-posed: many rewards explain the same behaviour.
+              </td>
+              <td>
+                <span class="mdp-tag">\(\mathcal{S}\): Finite MDP states</span>
+                <span class="mdp-tag">\(\mathcal{A}\): Finite actions</span>
+                <span class="mdp-tag">\(\mathcal{P}\): Known transition model</span>
+                <span class="mdp-tag">\(\mathcal{R}\): Linear \(w^T\phi(s)\)</span>
+                <span class="mdp-tag">Obj: Match \(\mu(\pi) \approx \mu_E\)</span>
+              </td>
+              <td>
+                <div class="limitation-box">
+                  <strong>Ambiguity:</strong> no unique reward; returns a mixture of policies rather than a single probabilistic route model. Not evaluated on real road networks.
+                </div>
+              </td>
+              <td><div class="advantage-box">They match feature expectations and return a <strong>mixture of policies</strong>; we fit one <strong>probabilistic route model</strong> by maximum likelihood, so held-out trips get a likelihood (trip NLL 5.46). We run on a <strong>real road graph</strong>, not a gridworld/simulator.</div></td>
+            </tr>
+
+            <tr data-category="deep">
+              <td>
+                <span class="paper-title">Maximum Entropy Deep Inverse Reinforcement Learning</span>
+                <span class="authors">Markus Wulfmeier, Peter Ondruska, Ingmar Posner</span>
+                <span class="venue-badge venue-ieee">arXiv 2015</span>
+              </td>
+              <td>
+                <strong>arXiv:1507.04888</strong> (2015)<br>Deep RL Workshop, NIPS 2015, Montreal<br><em>Journal follow-up: Wulfmeier et al., Intl. J. Robotics Research, 2017 (large-scale driving)</em><br><small style="color:var(--text-dim);">Workshop / preprint</small>
+              </td>
+              <td>
+                <div class="dataset-pill">
+                  <strong>Grid-world benchmarks</strong><br>
+                  <span class="dataset-open">Synthetic</span><br>
+                  • Objectworld-style grid tasks<br>
+                  • Neural-network reward<br>
+                  • Compared with linear MaxEnt IRL
+                </div>
+              </td>
+              <td>
+                Replaces the linear reward with a <strong>neural network</strong> trained end-to-end through the MaxEnt IRL gradient, learning non-linear features from raw inputs.
+              </td>
+              <td>
+                <span class="mdp-tag">\(\mathcal{S}\): Grid / feature-map cells</span>
+                <span class="mdp-tag">\(\mathcal{A}\): Grid moves</span>
+                <span class="mdp-tag">\(\mathcal{P}\): Deterministic or known</span>
+                <span class="mdp-tag">\(\mathcal{R}\): Network \(r_\psi(s)\)</span>
+                <span class="mdp-tag">Obj: MaxEnt likelihood, backprop through \(r_\psi\)</span>
+              </td>
+              <td>
+                <div class="limitation-box">
+                  <strong>Less interpretable</strong> reward; the paper targets grid-worlds, not road-network route choice with turn costs.
+                </div>
+              </td>
+              <td><div class="advantage-box">They use a <strong>neural reward</strong> (more expressive); we keep a <strong>linear, readable</strong> reward and apply it to <strong>route choice on a road graph</strong> with turn costs. <em>They are better</em> at capturing non-linear structure; we trade that for interpretability.</div></td>
+            </tr>
+
+            <tr data-category="classic">
+              <td>
+                <span class="paper-title">Conditional Logit Analysis of Qualitative Choice Behavior</span>
+                <span class="authors">Daniel McFadden (route-choice context: Bierlaire &amp; Frejinger 2008; Prato 2009)</span>
+                <span class="venue-badge venue-classic">Econometrics 1974</span>
+              </td>
+              <td>
+                <strong>Book chapter</strong> in <em>Frontiers in Econometrics</em> (P. Zarembka, ed.), Academic Press, 1974, pp. 105–142<br><em>Route choice: Bierlaire &amp; Frejinger, Transp. Res. Part C, 2008; Prato, J. Choice Modelling 2(1), 2009</em><br><small style="color:var(--text-dim);">Transportation / econometrics journals</small>
+              </td>
+              <td>
+                <div class="dataset-pill">
+                  <strong>Revealed-preference surveys / GPS</strong><br>
+                  <span class="dataset-open">Method, not a dataset</span><br>
+                  • Utility over a generated choice set<br>
+                  • Path-size / overlap corrections<br>
+                  • Choice-set generation is the key difficulty
+                </div>
+              </td>
+              <td>
+                Models a route as the maximum-utility alternative in a <strong>generated choice set</strong>, \(P(i) \propto e^{V_i}\) with linear utility; parameters are readable (e.g. value of time).
+              </td>
+              <td>
+                <span class="mdp-tag">\(\mathcal{S}\): None (single-shot choice)</span>
+                <span class="mdp-tag">\(\mathcal{A}\): Whole-route alternatives</span>
+                <span class="mdp-tag">\(\mathcal{P}\): Not modelled</span>
+                <span class="mdp-tag">\(\mathcal{R}\): Linear utility \(\beta^T x_i\)</span>
+                <span class="mdp-tag">Obj: Conditional-logit likelihood</span>
+              </td>
+              <td>
+                <div class="limitation-box">
+                  <strong>No sequential decision model</strong>; accuracy depends on how the choice set is sampled, which is hard on large networks.
+                </div>
+              </td>
+              <td><div class="advantage-box">Logit scores <strong>whole candidate routes</strong> and needs a sampled choice set; we model <strong>step-by-step decisions</strong> with soft value iteration, so no choice-set generation. <em>They are better</em> at statistical inference (standard errors), which our weights lack.</div></td>
+            </tr>
+
+            <tr data-category="classic">
+              <td>
+                <span class="paper-title">Shortest &amp; Fastest Path Routing (Dijkstra / A*)</span>
+                <span class="authors">Edsger W. Dijkstra (1959); Peter Hart, Nils Nilsson, Bertram Raphael (1968)</span>
+                <span class="venue-badge venue-classic">Classic 1959 / 1968</span>
+              </td>
+              <td>
+                <strong>Numerische Mathematik 1</strong>, pp. 269–271 (Dijkstra, 1959)<br><strong>IEEE Trans. Systems Science &amp; Cybernetics 4(2)</strong>, pp. 100–107 (Hart, Nilsson, Raphael, 1968)<br><small style="color:var(--text-dim);">Classic journals</small>
+              </td>
+              <td>
+                <div class="dataset-pill">
+                  <strong>Any weighted graph</strong><br>
+                  <span class="dataset-open">No data needed</span><br>
+                  • Fixed edge weights<br>
+                  • Length or free-flow time<br>
+                  • Zero learned parameters
+                </div>
+              </td>
+              <td>
+                Returns the <strong>minimum-cost path</strong> under a fixed additive edge weight (distance or free-flow travel time). Our strongest baseline on Porto.
+              </td>
+              <td>
+                <span class="mdp-tag">\(\mathcal{S}\): Graph nodes</span>
+                <span class="mdp-tag">\(\mathcal{A}\): Outgoing edges</span>
+                <span class="mdp-tag">\(\mathcal{P}\): Deterministic</span>
+                <span class="mdp-tag">\(\mathcal{R}\): Fixed \(-c(e)\)</span>
+                <span class="mdp-tag">Obj: \(\min \sum_e c(e)\)</span>
+              </td>
+              <td>
+                <div class="limitation-box">
+                  <strong>Assumes</strong> every driver minimises one fixed metric. On Porto, Shortest gets F1 0.636 but ignores turns, familiarity and road class.
+                </div>
+              </td>
+              <td><div class="advantage-box">Our <strong>main baseline</strong>: a fixed metric with no learning. We learn the cost from data and beat it by +0.046 F1 (p = 2.7e-5), but the margin is modest.</div></td>
+            </tr>
+
+            <tr data-category="maxent">
+              <td>
+                <span class="paper-title">Navigate Like a Cabbie: Probabilistic Reasoning from Observed Context-Aware Behavior</span>
+                <span class="authors">Brian D. Ziebart, Andrew L. Maas, Anind K. Dey, J. Andrew Bagnell</span>
+                <span class="venue-badge venue-aaai">UbiComp 2008</span>
+              </td>
+              <td>
+                <strong>UbiComp 2008</strong> — 10th Intl. Conference on Ubiquitous Computing<br>Seoul, South Korea, Sept. 2008<br><small style="color:var(--text-dim);">Top ubiquitous-computing conference</small>
+              </td>
+              <td>
+                <div class="dataset-pill">
+                  <strong>Pittsburgh taxi GPS</strong><br>
+                  <span class="dataset-prop">Not publicly released</span><br>
+                  • Same taxi data as Ziebart (AAAI 2008)<br>
+                  • Predicts route, turn and destination<br>
+                  • Context-aware (e.g. time of day)
+                </div>
+              </td>
+              <td>
+                Extends MaxEnt IRL into a <strong>Bayesian predictor</strong>: infers the <em>unknown destination</em> from a partial trip and predicts next turns using context.
+              </td>
+              <td>
+                <span class="mdp-tag">\(\mathcal{S}\): Road segment + context</span>
+                <span class="mdp-tag">\(\mathcal{A}\): Next segment</span>
+                <span class="mdp-tag">\(\mathcal{P}\): Deterministic</span>
+                <span class="mdp-tag">\(\mathcal{R}\): Linear in road + context features</span>
+                <span class="mdp-tag">Obj: MaxEnt path likelihood; posterior over destination</span>
+              </td>
+              <td>
+                <div class="limitation-box">
+                  <strong>Private data</strong>; strong dependence on hand-designed context features; no open code.
+                </div>
+              </td>
+              <td><div class="advantage-box">We assume the <strong>destination is known</strong> and do not predict it or use context; they do. We differ by <strong>public data/code</strong> and a tested route-<em>overlap</em> benchmark. <em>They are better</em> at online prediction under destination uncertainty. Our <code>src/context_irl.py</code> (time/context reward) is only a prototype.</div></td>
+            </tr>
+
+            <tr data-category="deep">
+              <td>
+                <span class="paper-title">Guided Cost Learning: Deep Inverse Optimal Control via Policy Optimization</span>
+                <span class="authors">Chelsea Finn, Sergey Levine, Pieter Abbeel</span>
+                <span class="venue-badge venue-aaai">ICML 2016</span>
+              </td>
+              <td>
+                <strong>ICML 2016</strong> — 33rd Intl. Conference on Machine Learning<br>New York, USA, June 2016<br><small style="color:var(--text-dim);">Top ML conference</small>
+              </td>
+              <td>
+                <div class="dataset-pill">
+                  <strong>Robot manipulation tasks</strong><br>
+                  <span class="dataset-open">Simulated &amp; real robot demos</span><br>
+                  • Continuous-control tasks<br>
+                  • Neural-network cost<br>
+                  • Sample-based partition estimate
+                </div>
+              </td>
+              <td>
+                Learns a <strong>non-linear neural cost</strong> with a <em>sampling-based</em> estimate of the MaxEnt partition function (policy optimisation + importance weights) for continuous control.
+              </td>
+              <td>
+                <span class="mdp-tag">\(\mathcal{S}\): Continuous robot state</span>
+                <span class="mdp-tag">\(\mathcal{A}\): Continuous controls</span>
+                <span class="mdp-tag">\(\mathcal{P}\): Unknown / simulated dynamics</span>
+                <span class="mdp-tag">\(\mathcal{R}\): Neural cost \(c_\theta\)</span>
+                <span class="mdp-tag">Obj: MaxEnt IRL with sampled \(Z\)</span>
+              </td>
+              <td>
+                <div class="limitation-box">
+                  Sampling variance and hyper-parameter sensitivity; not designed for discrete road networks; costs are hard to interpret.
+                </div>
+              </td>
+              <td><div class="advantage-box">Our MDP is <strong>small and discrete</strong>, so the partition function and its gradient are computed <strong>exactly by dynamic programming</strong> (no sampling). <em>They are better</em> for high-dimensional continuous control and non-linear costs.</div></td>
+            </tr>
+
+            <tr data-category="classic">
+              <td>
+                <span class="paper-title">Hidden Markov Map Matching Through Noise and Sparseness</span>
+                <span class="authors">Paul Newson, John Krumm</span>
+                <span class="venue-badge venue-kdd">ACM SIGSPATIAL 2009</span>
+              </td>
+              <td>
+                <strong>ACM SIGSPATIAL GIS 2009</strong> — 17th Intl. Conference on Advances in Geographic Information Systems<br>Seattle, USA, Nov. 2009<br><small style="color:var(--text-dim);">Leading GIS conference</small>
+              </td>
+              <td>
+                <div class="dataset-pill">
+                  <strong>Noisy GPS traces</strong><br>
+                  <span class="dataset-open">Method for preprocessing</span><br>
+                  • HMM over candidate road segments<br>
+                  • Robust to GPS noise and sparse sampling<br>
+                  • We use the Leuven MapMatching HMM implementation
+                </div>
+              </td>
+              <td>
+                Maps noisy GPS points to the <strong>most likely road-segment sequence</strong> with an HMM (emission = GPS error, transition = route plausibility).
+              </td>
+              <td>
+                <span class="mdp-tag">\(\mathcal{S}\): Hidden road segment</span>
+                <span class="mdp-tag">\(\mathcal{A}\): —</span>
+                <span class="mdp-tag">\(\mathcal{P}\): Route-distance based</span>
+                <span class="mdp-tag">\(\mathcal{R}\): —</span>
+                <span class="mdp-tag">Obj: Viterbi path</span>
+              </td>
+              <td>
+                <div class="limitation-box">
+                  Errors remain on sparse or noisy traces; only 40% of our attempted Porto trips matched.
+                </div>
+              </td>
+              <td><div class="advantage-box">Not a competitor: it is our <strong>data-preparation step</strong>. We do not claim a new matcher; matched paths are treated as ground-truth demonstrations, which is a limitation.</div></td>
+            </tr>
+
+            <tr class="our-work-row" data-category="ours">
+              <td>
+                <span class="paper-title" style="color:var(--accent-emerald);">✨ This Project: Edge-State MaxEnt IRL on Porto Taxi Trips</span>
+                <span class="authors">Project team (22AIE401, Amrita Vishwa Vidyapeetham)</span>
+                <span class="venue-badge venue-ours">THIS PROJECT (2026)</span>
+              </td>
+              <td>
+                <strong>Course project</strong><br>Open code + live dashboard<br><em>Not peer-reviewed</em><br><small style="color:var(--accent-emerald); font-weight:700;">Year: 2026</small>
+              </td>
+              <td>
+                <div class="dataset-pill" style="border-color: rgba(52,211,153,0.3); background: rgba(52,211,153,0.06);">
+                  <strong>Porto taxi (ECML/PKDD 2015) + OSM</strong><br>
+                  <span class="dataset-open">Public data</span><br>
+                  • 3,000 HMM map-matched trips (Leuven MapMatching)<br>
+                  • 7,528 attempted · 40% matched<br>
+                  • Central-Porto graph: 3,367 nodes, 6,784 edges<br>
+                  • 5-fold CV; 600 held-out test trips per fold
+                </div>
+              </td>
+              <td>
+                An <strong>exact (no-sampling) linear-reward MaxEnt IRL</strong> on an edge-state MDP, with an identifiable 11-feature set (incl. goal direction and independently-estimated edge familiarity) and bootstrap/paired-test evaluation.
+              </td>
+              <td>
+                <span class="mdp-tag">\(\mathcal{S}\): Incoming directed edge (+ fixed destination)</span>
+                <span class="mdp-tag">\(\mathcal{A}\): Outgoing edges at its head</span>
+                <span class="mdp-tag">\(\mathcal{P}\): Deterministic</span>
+                <span class="mdp-tag">\(\mathcal{R}\): \(w^T\phi(e,e')\), 11 features</span>
+                <span class="mdp-tag">Obj: Exact soft-Bellman MaxEnt likelihood, \(\gamma=1\), \(H=80\)</span>
+              </td>
+              <td>
+                <div class="advantage-box">
+                  <strong>Honest limits</strong>: a modest gain (+0.04–0.05 F1) over Shortest; a popularity-weighted shortest path ties it in CV; single seed, one city, one reward for all drivers.
+                </div>
+              </td>
+              <td><div class="advantage-box">—</div></td>
+            </tr>
+
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+
+    <!-- Detailed difference table -->
+    <section id="diff-section">
+      <div class="section-head">
+        <h2><span>⚖️</span> How We Differ From Each Work</h2>
+        <p>For each paper: what it is, where it was published, what we do differently, and where it is stronger than our project.</p>
+      </div>
+      <div class="radar-summary">
+        <table class="summary-table">
+          <thead>
+            <tr><th>Work &amp; venue</th><th>Their approach</th><th>What we do differently</th><th>Where they are stronger</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>Ziebart et al.</strong><br>AAAI 2008 (Chicago)</td><td>MaxEnt IRL on private Pittsburgh taxi GPS with a linear road-feature reward</td><td>Public Porto data; incoming-edge state; identifiable features + goal direction + edge familiarity; CIs and paired tests; CV</td><td>Original method; larger network; real-world validation of the idea</td></tr>
+            <tr><td><strong>Ziebart et al.</strong><br>UbiComp 2008 (Seoul)</td><td>Bayesian route/turn/destination prediction with context</td><td>Known destination; open data and code; overlap-based benchmark vs strong baselines</td><td>Predicts unknown destination and uses context</td></tr>
+            <tr><td><strong>Abbeel &amp; Ng</strong><br>ICML 2004 (Banff)</td><td>Feature-expectation matching; mixture of policies</td><td>One probabilistic policy fit by maximum likelihood; real road graph; held-out likelihood</td><td>Clear theoretical guarantees for apprenticeship learning</td></tr>
+            <tr><td><strong>Wulfmeier et al.</strong><br>NIPS 2015 Deep RL workshop</td><td>Neural-network reward inside MaxEnt IRL</td><td>Linear, readable reward on a road network with turn costs</td><td>Non-linear expressiveness</td></tr>
+            <tr><td><strong>Finn, Levine, Abbeel</strong><br>ICML 2016 (New York)</td><td>Sample-based MaxEnt IRL with neural cost for continuous control</td><td>Exact dynamic programming on a small discrete MDP; no sampling noise</td><td>Scales to continuous, high-dimensional control</td></tr>
+            <tr><td><strong>McFadden / route-choice logit</strong><br>1974; Transp. Res. C 2008</td><td>Utility model over a generated route choice set</td><td>Sequential model over edges; no choice-set sampling</td><td>Standard errors and decades of econometric validation</td></tr>
+            <tr><td><strong>Dijkstra / A*</strong><br>1959 / 1968</td><td>Minimum-cost path, fixed metric</td><td>Learned cost; +0.046 F1 (p = 2.7e-5) on held-out Porto trips</td><td>Fast, parameter-free; hard to beat by much on taxi data</td></tr>
+            <tr><td><strong>Newson &amp; Krumm</strong><br>ACM SIGSPATIAL 2009 (Seattle)</td><td>HMM map matching</td><td>Used as our preprocessing, not a contribution</td><td>—</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Proposed Difference Highlight Banner -->
+    <div class="callout-banner">
+      <div class="callout-header">
+        <span style="font-size: 1.8rem;">🎯</span>
+        <h3>Positioning</h3>
+      </div>
+      <div class="callout-body">
+        <strong>What this project is:</strong> a reproducible, interpretable MaxEnt IRL study on <strong>public</strong> Porto taxi data. Its state is the incoming edge, so turn features are Markov; gradients are computed exactly by finite-horizon soft value iteration; and every result is reported with confidence intervals against Dijkstra-Shortest, Dijkstra-Fastest, a myopic classifier and a popularity-weighted baseline. It does <em>not</em> claim a new learning algorithm.
+      </div>
+      <div class="callout-sub">
+        "Our contribution is an open, readable and statistically honest benchmark of MaxEnt IRL for route choice, including where it does not beat simple baselines."
+      </div>
+    </div>
+
+    <!-- Section 2: Detailed MDP Formulations -->
+    <section id="mdp-section">
+      <div class="section-head">
+        <h2><span>📐</span> Detailed MDP Formulations per Literature Review</h2>
+        <p>A rigorous side-by-side comparison of the state spaces, action bounds, transition kernels, reward functions, and policy objectives across each investigated paper.</p>
+      </div>
+
+      <div class="mdp-grid">
+
+        <div class="mdp-card">
+          <div>
+            <div class="mdp-card-header">
+              <div class="mdp-card-title">
+                Ziebart et al. (2008)
+                <span class="venue-badge venue-aaai">AAAI '08</span>
+              </div>
+              <div class="mdp-card-cite">Maximum Entropy Inverse Reinforcement Learning</div>
+            </div>
+            <div class="mdp-tuple">\(\mathcal{M} = \langle \mathcal{S}, \mathcal{A}, \mathcal{P}, \mathcal{R}_{\theta}, \mathcal{S}_{goal} \rangle\)</div>
+            <div class="mdp-breakdown">
+              <div class="mdp-item">
+                <span class="mdp-symbol">\(\mathcal{S}\)</span>
+                <div class="mdp-desc"><strong>State Space:</strong> Road segments of the road network (first-order Markov decision process over the map).</div>
+              </div>
+              <div class="mdp-item">
+                <span class="mdp-symbol">\(\mathcal{A}\)</span>
+                <div class="mdp-desc"><strong>Action Space:</strong> Next adjacent road segment from the current one.</div>
+              </div>
+              <div class="mdp-item">
+                <span class="mdp-symbol">\(\mathcal{P}\)</span>
+                <div class="mdp-desc"><strong>Transitions:</strong> Deterministic: choosing a segment moves the vehicle onto it.</div>
+              </div>
+              <div class="mdp-item">
+                <span class="mdp-symbol">\(\mathcal{R}\)</span>
+                <div class="mdp-desc"><strong>Reward Function:</strong> Linear in road features, \(\mathcal{R}_\theta = \theta^T f\) (road type, speed, lanes, turn types).</div>
+              </div>
+              <div class="mdp-item">
+                <span class="mdp-symbol">\(\pi^*\)</span>
+                <div class="mdp-desc"><strong>Trajectory Probability:</strong> \(P(\tau \mid \theta) = \frac{1}{Z(\theta)} \exp(\theta^T f(\tau))\); gradient is expert minus expected feature counts via backward-forward passes.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mdp-card">
+          <div>
+            <div class="mdp-card-header">
+              <div class="mdp-card-title">
+                Abbeel &amp; Ng (2004)
+                <span class="venue-badge venue-aaai">ICML '04</span>
+              </div>
+              <div class="mdp-card-cite">Apprenticeship Learning via Inverse Reinforcement Learning</div>
+            </div>
+            <div class="mdp-tuple">\(\mathcal{M} = \langle \mathcal{S}, \mathcal{A}, \mathcal{P}, \gamma, \mathcal{R}=w^T\phi \rangle\)</div>
+            <div class="mdp-breakdown">
+              <div class="mdp-item">
+                <span class="mdp-symbol">\(\mathcal{S}\)</span>
+                <div class="mdp-desc"><strong>State Space:</strong> Finite MDP states with a known feature map \(\phi(s)\).</div>
+              </div>
+              <div class="mdp-item">
+                <span class="mdp-symbol">\(\mathcal{A}\)</span>
+                <div class="mdp-desc"><strong>Action Space:</strong> Finite action set.</div>
+              </div>
+              <div class="mdp-item">
+                <span class="mdp-symbol">\(\mathcal{P}\)</span>
+                <div class="mdp-desc"><strong>Transitions:</strong> Known transition model.</div>
+              </div>
+              <div class="mdp-item">
+                <span class="mdp-symbol">\(\mathcal{R}\)</span>
+                <div class="mdp-desc"><strong>Reward Function:</strong> Linear \(w^T\phi(s)\) with \(\lVert w \rVert \le 1\).</div>
+              </div>
+              <div class="mdp-item">
+                <span class="mdp-symbol">\(\pi^*\)</span>
+                <div class="mdp-desc"><strong>Policy Objective:</strong> Find a policy whose discounted feature expectations \(\mu(\pi)\) match the expert's \(\mu_E\); returns a mixture of policies.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mdp-card">
+          <div>
+            <div class="mdp-card-header">
+              <div class="mdp-card-title">
+                Wulfmeier et al. (2015)
+                <span class="venue-badge venue-ieee">arXiv</span>
+              </div>
+              <div class="mdp-card-cite">Maximum Entropy Deep Inverse Reinforcement Learning</div>
+            </div>
+            <div class="mdp-tuple">\(\mathcal{M} = \langle \mathcal{S}, \mathcal{A}, \mathcal{P}, r_\psi \rangle\)</div>
+            <div class="mdp-breakdown">
+              <div class="mdp-item">
+                <span class="mdp-symbol">\(\mathcal{S}\)</span>
+                <div class="mdp-desc"><strong>State Space:</strong> Grid cells with raw feature maps as network input.</div>
+              </div>
+              <div class="mdp-item">
+                <span class="mdp-symbol">\(\mathcal{A}\)</span>
+                <div class="mdp-desc"><strong>Action Space:</strong> Grid moves.</div>
+              </div>
+              <div class="mdp-item">
+                <span class="mdp-symbol">\(\mathcal{P}\)</span>
+                <div class="mdp-desc"><strong>Transitions:</strong> Known (deterministic) dynamics in the benchmarks.</div>
+              </div>
+              <div class="mdp-item">
+                <span class="mdp-symbol">\(\mathcal{R}\)</span>
+                <div class="mdp-desc"><strong>Reward Function:</strong> Neural network \(r_\psi(s)\) in place of a linear reward.</div>
+              </div>
+              <div class="mdp-item">
+                <span class="mdp-symbol">\(\pi^*\)</span>
+                <div class="mdp-desc"><strong>Objective:</strong> MaxEnt likelihood; gradient with respect to \(\psi\) is obtained by back-propagating (expert minus expected state visitation) through the network.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mdp-card">
+          <div>
+            <div class="mdp-card-header">
+              <div class="mdp-card-title">
+                McFadden (1974) / route-choice logit
+                <span class="venue-badge venue-classic">Econometrics</span>
+              </div>
+              <div class="mdp-card-cite">Conditional Logit over a Route Choice Set</div>
+            </div>
+            <div class="mdp-tuple">\(\mathcal{M} = \langle \mathcal{C}_{od}, V_i = \beta^T x_i \rangle\)</div>
+            <div class="mdp-breakdown">
+              <div class="mdp-item">
+                <span class="mdp-symbol">\(\mathcal{S}\)</span>
+                <div class="mdp-desc"><strong>State Space:</strong> None: a one-shot choice for each origin-destination pair.</div>
+              </div>
+              <div class="mdp-item">
+                <span class="mdp-symbol">\(\mathcal{A}\)</span>
+                <div class="mdp-desc"><strong>Action Space:</strong> A generated set of complete candidate routes \(\mathcal{C}_{od}\).</div>
+              </div>
+              <div class="mdp-item">
+                <span class="mdp-symbol">\(\mathcal{P}\)</span>
+                <div class="mdp-desc"><strong>Transitions:</strong> Not modelled.</div>
+              </div>
+              <div class="mdp-item">
+                <span class="mdp-symbol">\(\mathcal{R}\)</span>
+                <div class="mdp-desc"><strong>Utility:</strong> Linear \(V_i = \beta^T x_i\) in route attributes (time, distance, turns), with optional path-size correction.</div>
+              </div>
+              <div class="mdp-item">
+                <span class="mdp-symbol">\(\pi^*\)</span>
+                <div class="mdp-desc"><strong>Choice Rule:</strong> \(P(i) = e^{V_i} / \sum_{j \in \mathcal{C}} e^{V_j}\).</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mdp-card">
+          <div>
+            <div class="mdp-card-header">
+              <div class="mdp-card-title">
+                Dijkstra / A* (1959, 1968)
+                <span class="venue-badge venue-classic">Classical</span>
+              </div>
+              <div class="mdp-card-cite">Single-Metric Shortest / Fastest Path Search</div>
+            </div>
+            <div class="mdp-tuple">\(\mathcal{M} = \langle V, E, \mathcal{P}_{\text{det}}, -c(e), v_{dest} \rangle\)</div>
+            <div class="mdp-breakdown">
+              <div class="mdp-item">
+                <span class="mdp-symbol">\(\mathcal{S}\)</span>
+                <div class="mdp-desc"><strong>State Space:</strong> Graph nodes \(v \in V\).</div>
+              </div>
+              <div class="mdp-item">
+                <span class="mdp-symbol">\(\mathcal{A}\)</span>
+                <div class="mdp-desc"><strong>Action Space:</strong> Outgoing directed edges \(e=(u,v)\).</div>
+              </div>
+              <div class="mdp-item">
+                <span class="mdp-symbol">\(\mathcal{P}\)</span>
+                <div class="mdp-desc"><strong>Transitions:</strong> Deterministic: \(P(v \mid u, e) = 1\).</div>
+              </div>
+              <div class="mdp-item">
+                <span class="mdp-symbol">\(\mathcal{R}\)</span>
+                <div class="mdp-desc"><strong>Cost / Reward:</strong> Fixed \(-c(e)\) with \(c\) = length or length/speed.</div>
+              </div>
+              <div class="mdp-item">
+                <span class="mdp-symbol">\(\pi^*\)</span>
+                <div class="mdp-desc"><strong>Optimal Policy:</strong> \(\arg\min \sum_{e \in \tau} c(e)\) found by priority-queue search.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mdp-card highlight">
+          <div>
+            <div class="mdp-card-header">
+              <div class="mdp-card-title" style="color:var(--accent-emerald);">
+                ⭐ This project: Edge-State MaxEnt IRL
+                <span class="venue-badge venue-ours">THIS PROJECT</span>
+              </div>
+              <div class="mdp-card-cite">Exact Linear-Reward Route Preference Learning</div>
+            </div>
+            <div class="mdp-tuple" style="border-color:rgba(52,211,153,0.4); color:var(--accent-emerald);">\(\mathcal{M} = \langle \mathcal{S}=E\times\{d\}, \mathcal{A}, \mathcal{P}, \mathcal{R}_{\mathbf{w}}, \gamma=1 \rangle\), \(H=80\)</div>
+            <div class="mdp-breakdown">
+              <div class="mdp-item">
+                <span class="mdp-symbol" style="background:rgba(52,211,153,0.15); color:var(--accent-emerald);">\(\mathcal{S}\)</span>
+                <div class="mdp-desc"><strong>State Space:</strong> The <em>incoming directed edge</em> \(e_{t-1}=(u\to v,k)\) with a fixed destination \(d\). It fixes both the current node and the heading, so turn angle is a function of (state, action).</div>
+              </div>
+              <div class="mdp-item">
+                <span class="mdp-symbol" style="background:rgba(52,211,153,0.15); color:var(--accent-emerald);">\(\mathcal{A}\)</span>
+                <div class="mdp-desc"><strong>Action Space:</strong> \(A(e)=\{e' : \text{tail}(e')=\text{head}(e)\}\) (about 2–4 roads); U-turns allowed but penalised.</div>
+              </div>
+              <div class="mdp-item">
+                <span class="mdp-symbol" style="background:rgba(52,211,153,0.15); color:var(--accent-emerald);">\(\mathcal{P}\)</span>
+                <div class="mdp-desc"><strong>Transitions:</strong> Deterministic: \(P(s'=a\mid s,a)=1\). Terminal when \(\text{head}(e)=d\), with \(V=0\).</div>
+              </div>
+              <div class="mdp-item">
+                <span class="mdp-symbol" style="background:rgba(52,211,153,0.15); color:var(--accent-emerald);">\(\mathcal{R}\)</span>
+                <div class="mdp-desc"><strong>Feature Vector:</strong> \(\mathcal{R}_{\mathbf{w}}(e,e')=\mathbf{w}^T\phi(e,e')\) with 11 features: length, travel time, per-step constant, motorway, primary, slight turn, sharp turn, lanes, same-road continuation, away-from-goal, edge familiarity. <strong>w is unknown and learned.</strong></div>
+              </div>
+              <div class="mdp-item">
+                <span class="mdp-symbol" style="background:rgba(52,211,153,0.15); color:var(--accent-emerald);">\(\pi^*\)</span>
+                <div class="mdp-desc"><strong>Soft Bellman:</strong> \(V(e)=\log\sum_{e'} \exp Q(e,e')\), \(\pi(e'\mid e)=\exp(Q-V)\); exact backward and forward passes, no sampling. The single most likely route is extracted with Viterbi/Dijkstra on \(V-Q\).</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Section 3: Why Ours Is Unique -->
+    <section id="uniqueness-section">
+      <div class="section-head">
+        <h2><span>🧭</span> What This Project Contributes (and What It Does Not)</h2>
+        <p>The contribution is an open, careful application and evaluation of known methods; the points below separate what is new here from what is inherited from prior work.</p>
+      </div>
+
+      <div class="uniqueness-grid">
+
+        <div class="feature-card">
+          <div class="feature-icon">🔄</div>
+          <h3>1. Heading Lives in the State</h3>
+          <p>
+            With a node-only state the incoming bearing is lost, so a turn cost is not a function of (state, action). We use the incoming edge as state: \(\mathcal{S}=E\), which keeps turn features Markov. This is a modelling choice, not a new idea: Ziebart et al. also use turn-type features.
+          </p>
+          <span class="feature-tag">Edge-State MDP</span>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">📊</div>
+          <h3>2. Exact Gradients, No Sampling</h3>
+          <p>
+            Expected feature counts come from finite-horizon soft value iteration plus an exact forward pass, so \(\nabla = \mathbb{E}_\pi[\phi] - \phi_{\text{expert}} + \lambda w\) has no Monte-Carlo noise. This follows the original MaxEnt IRL algorithm; the cost is about 13 minutes per CV fold on CPU.
+          </p>
+          <span class="feature-tag">Exact, Shared with Ziebart</span>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🔍</div>
+          <h3>3. Readable Weights</h3>
+          <p>
+            The reward is linear, so weights can be read directly. On Porto (v3, single split): sharp turn −1.46, slight turn −0.52, away-from-goal −0.29, per-step −0.67, edge familiarity +0.87. Note that length and travel time are correlated (r = 0.81), so individual weights should be read together; we therefore do not report a value-of-time figure.
+          </p>
+          <span class="feature-tag">Interpretable, with Caveats</span>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🔓</div>
+          <h3>4. Open, Reproducible Pipeline</h3>
+          <p>
+            Everything uses public assets: the Porto taxi data (ECML/PKDD 2015), OpenStreetMap, and HMM map matching. Only 40% of attempted trips could be matched (3,000 of 7,528), and matching errors are treated as ground truth.
+          </p>
+          <span class="feature-tag">Open Data &amp; Code</span>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🧩</div>
+          <h3>5. Identifiable Features + Familiarity</h3>
+          <p>
+            The first feature set had collinear features and lost to Dijkstra-Shortest (F1 0.611 vs 0.636). We dropped reference levels, added a per-step constant, same-road and away-from-goal features, and a familiarity feature estimated on an independent trip pool, lifting F1 to 0.659 raw and 0.682 after a validation-chosen length penalty.
+          </p>
+          <span class="feature-tag">v1 → v3</span>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">📈</div>
+          <h3>6. Honest Empirical Results</h3>
+          <p>
+            On 600 held-out trips: IRL 0.682 vs Shortest 0.636 (paired p = 2.7e-5), Fastest 0.454, myopic 0.162; Top-1 junction accuracy 93.7%. In 5-fold CV: 0.669 ± 0.010 vs 0.630 ± 0.003, <strong>but a popularity-weighted shortest path scores 0.671</strong>, so the gain is modest and partly due to the familiarity signal.
+          </p>
+          <span class="feature-tag">Modest, Significant Gain</span>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Section 4: Comprehensive Comparison Matrix -->
+    <section id="matrix-section">
+      <div class="section-head">
+        <h2><span>⚡</span> Multi-Dimensional System Comparison Matrix</h2>
+        <p>Qualitative comparison across seven requirements. Entries describe what each work reports, not a head-to-head benchmark.</p>
+      </div>
+
+      <div class="radar-summary">
+        <table class="summary-table">
+          <thead>
+            <tr>
+              <th>Evaluation Dimension</th>
+              <th>Dijkstra / A*</th>
+              <th>Route-choice logit</th>
+              <th>Ziebart et al. (2008)</th>
+              <th>Wulfmeier et al. (2015)</th>
+              <th style="color:var(--accent-emerald);">This project (2026)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Learns from observed trajectories</td>
+              <td><span class="cross">✗ No</span></td>
+              <td><span class="check">✓ Yes</span></td>
+              <td><span class="check">✓ Yes</span></td>
+              <td><span class="check">✓ Yes (demos)</span></td>
+              <td><span class="check">✓ Yes</span></td>
+            </tr>
+            <tr>
+              <td>Sequential, goal-aware route model</td>
+              <td><span class="check">✓ Single metric</span></td>
+              <td><span class="cross">✗ Choice set only</span></td>
+              <td><span class="check">✓ Yes</span></td>
+              <td><span class="check">✓ Yes</span></td>
+              <td><span class="check">✓ Yes</span></td>
+            </tr>
+            <tr>
+              <td>Turn / heading handled</td>
+              <td><span class="cross">✗ No</span></td>
+              <td><span class="partial">~ If in utility</span></td>
+              <td><span class="partial">~ Turn-type features</span></td>
+              <td><span class="partial">~ Not targeted</span></td>
+              <td><span class="check">✓ Heading in state</span></td>
+            </tr>
+            <tr>
+              <td>Exact (non-sampled) likelihood gradient</td>
+              <td><span class="cross">— N/A</span></td>
+              <td><span class="check">✓ MLE</span></td>
+              <td><span class="check">✓ Yes</span></td>
+              <td><span class="check">✓ Exact counts, NN reward</span></td>
+              <td><span class="check">✓ Exact analytical</span></td>
+            </tr>
+            <tr>
+              <td>Interpretable parameters</td>
+              <td><span class="partial">Fixed weights</span></td>
+              <td><span class="check">✓ High</span></td>
+              <td><span class="check">✓ High</span></td>
+              <td><span class="cross">✗ Neural reward</span></td>
+              <td><span class="check">✓ Linear weights</span></td>
+            </tr>
+            <tr>
+              <td>Public data and code</td>
+              <td><span class="check">✓ Yes</span></td>
+              <td><span class="check">✓ Yes</span></td>
+              <td><span class="cross">✗ Private data</span></td>
+              <td><span class="partial">~ Benchmarks only</span></td>
+              <td><span class="check">✓ Public data + code</span></td>
+            </tr>
+            <tr>
+              <td>Statistically tested vs. baselines on real routes</td>
+              <td><span class="cross">— N/A</span></td>
+              <td><span class="partial">~ Varies</span></td>
+              <td><span class="cross">✗ Not reported here</span></td>
+              <td><span class="cross">✗ Not on road routes</span></td>
+              <td><span class="check">✓ CIs, paired tests, CV</span></td>
+            </tr>
+            <tr>
+              <td>Interactive comparison dashboard</td>
+              <td><span class="cross">✗ No</span></td>
+              <td><span class="cross">✗ No</span></td>
+              <td><span class="cross">✗ No</span></td>
+              <td><span class="cross">✗ No</span></td>
+              <td><span class="check">✓ Built-in web UI</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </div>
+
+  <script>
+    // Search & Filter Interactions
+    const searchInput = document.getElementById('tableSearch');
+    const table = document.getElementById('masterTable');
+    const rows = table.querySelectorAll('tbody tr');
+    const filterBtns = document.querySelectorAll('.filter-btn');
+
+    let currentFilter = 'all';
+
+    function filterTable() {
+      const query = searchInput.value.toLowerCase().trim();
+
+      rows.forEach(row => {
+        const text = row.innerText.toLowerCase();
+        const category = row.getAttribute('data-category');
+
+        const matchesQuery = query === '' || text.includes(query);
+        const matchesFilter = (currentFilter === 'all') || (category === currentFilter);
+
+        if (matchesQuery && matchesFilter) {
+          row.style.display = '';
+        } else {
+          row.style.display = 'none';
+        }
+      });
+    }
+
+    searchInput.addEventListener('input', filterTable);
+
+    filterBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        filterBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentFilter = btn.getAttribute('data-filter');
+        filterTable();
+      });
+    });
+  </script>
+
+</body>
+</html>
