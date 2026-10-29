@@ -22,12 +22,32 @@ cache/
 *.json.cache
 
 # Compiled data (large binary files - regeneratable)
-# Uncomment if you don't want to track these:
-# data/sf_drive_graph.graphml
-# data/synthetic_trajectories.pkl
-# models/irl_weights.npy
-# models/irl_weights_history.pkl
-# results/irl_history.pkl
+data/sf_drive_graph.graphml
+data/synthetic_trajectories.pkl
+data/fam_*.pkl
+
+# Model history (large binary training logs - regeneratable)
+models/*_history.pkl
+
+# Results binary artifacts (regeneratable from model weights)
+results/**/*.npz
+results/**/*_weights*.npy
+results/**/*_weights*_history.pkl
+results/irl_history.pkl
+results/porto/irl_history.pkl
+results/porto/per_trip_metrics.npz
+
+# LaTeX report (large, managed separately)
+report/
+
+# Presentations and PDFs (managed separately, per user instruction)
+*.pptx
+*.pdf
+
+# Project planning docs (managed separately, per user instruction)
+INNOVATION_PLAN.md
+MDP_FORMULATION.md
+PROJECT_PLAN.md
 
 # Jupyter Notebooks checkpoints
 .ipynb_checkpoints/

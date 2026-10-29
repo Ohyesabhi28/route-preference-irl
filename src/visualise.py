@@ -22,7 +22,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from config import (
     RESULTS_DIR, FIGURES_DIR, FEATURES, TRUE_WEIGHTS,
-    WEIGHTS_SAVE_PATH
+    WEIGHTS_SAVE_PATH, SYNTHETIC
 )
 
 # Styling
@@ -235,7 +235,7 @@ def generate_all_figures():
     # Load weights
     if os.path.exists(WEIGHTS_SAVE_PATH):
         learned = np.load(WEIGHTS_SAVE_PATH)
-        true_w  = np.array(TRUE_WEIGHTS)
+        true_w  = np.array(TRUE_WEIGHTS) if SYNTHETIC else np.zeros(len(learned))
         plot_weights(learned, true_w)
     else:
         print("No weights found — skip weights plot.")
@@ -250,14 +250,13 @@ def generate_all_figures():
         print("No evaluation results found — skip metrics plot.")
 
     # Route visualisation
-    from graph_builder import build_graph
-    from trajectory_generator import load_trajectories
+    import region
     from mdp import RouteMDP
     from baselines import dijkstra_shortest, dijkstra_fastest
     import random
 
-    G    = build_graph()
-    data = load_trajectories()
+    G    = region.load_graph()
+    data = region.load_data(G)
     irl  = np.load(WEIGHTS_SAVE_PATH)
     mdp  = RouteMDP(G)
 

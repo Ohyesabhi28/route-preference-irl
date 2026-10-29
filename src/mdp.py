@@ -18,12 +18,20 @@ import numpy as np
 import networkx as nx
 from typing import Optional
 
-from config import N_FEATURES, FEATURES
+from config import (N_FEATURES, FEATURES, FEATURES_V1, FEATURE_SET,
+                    DEST_FEATURES)
 
 NEG = -1e4          # "minus infinity" that survives arithmetic
-TURN_IDX = [FEATURES.index("turn_straight"),
-            FEATURES.index("turn_slight"),
-            FEATURES.index("turn_sharp")]
+# Graph edges always store the v1 10-vector; turn slots are filled per transition.
+_B = {n: i for i, n in enumerate(FEATURES_V1)}
+TURN_IDX = [_B["turn_straight"], _B["turn_slight"], _B["turn_sharp"]]
+
+
+def _road_name(d: dict) -> str:
+    n = d.get("name")
+    if isinstance(n, (list, tuple)):
+        n = n[0] if n else None
+    return str(n) if n else ""
 
 
 def _angle(b_in: np.ndarray, b_out: np.ndarray) -> np.ndarray:
@@ -45,12 +53,21 @@ class RouteMDP:
         self.E = E
         self.e_src = np.array([self.nid[u] for u, _, _ in self.edges])
         self.e_dst = np.array([self.nid[v] for _, v, _ in self.edges])
-        self.F_edge = np.zeros((E, N_FEATURES))
+        F_base = np.zeros((E, len(FEATURES_V1)))
         self.bearing = np.zeros(E)
+        name_ids, name_of = {}, np.full(E, -1, dtype=int)
         for i, (u, v, k) in enumerate(self.edges):
             d = G[u][v][k]
-            self.F_edge[i] = d.get("features", np.zeros(N_FEATURES))
+            F_base[i] = d.get("features", np.zeros(len(FEATURES_V1)))
             self.bearing[i] = float(d.get("bearing", 0.0))
+            nm = _road_name(d)
+            if nm:
+                name_of[i] = name_ids.setdefault(nm, len(name_ids))
+        self.node_xy = np.array([[G.nodes[n].get("x", 0.0), G.nodes[n].get("y", 0.0)]
+                                 for n in self.nodes])
+        self.node_xy[:, 0] *= np.cos(np.radians(self.node_xy[:, 1].mean()))
+        self.dest_cols = [FEATURES.index(f) for f in DEST_FEATURES]
+        self._D_cache = {}
 
         # out-edges per node
         self.out_edges = [[] for _ in self.nodes]
@@ -70,15 +87,78 @@ class RouteMDP:
                     for i, (a, b) in enumerate(zip(t_src, t_dst))}
 
         ang = _angle(self.bearing[self.t_src], self.bearing[self.t_dst])
-        self.T_feat = self.F_edge[self.t_dst].copy()
-        self.T_feat[:, TURN_IDX[0]] = (ang < 30).astype(float)
-        self.T_feat[:, TURN_IDX[1]] = ((ang >= 30) & (ang < 90)).astype(float)
-        self.T_feat[:, TURN_IDX[2]] = (ang >= 90).astype(float)
+        T_base = F_base[self.t_dst].copy()
+        T_base[:, TURN_IDX[0]] = (ang < 30).astype(float)
+        T_base[:, TURN_IDX[1]] = ((ang >= 30) & (ang < 90)).astype(float)
+        T_base[:, TURN_IDX[2]] = (ang >= 90).astype(float)
+
+        fam = np.zeros(E)
+        if "edge_familiarity" in FEATURES:
+            import pickle
+            from config import FAMILIARITY_PATH
+            with open(FAMILIARITY_PATH, "rb") as fh:
+                cnt = pickle.load(fh)["counts"]
+            fam = np.log1p(np.array([cnt.get(e, 0) for e in self.edges], float))
+            fam /= max(fam.max(), 1.0)
+            self.familiarity = fam
+
+        if FEATURE_SET == "v1":
+            self.F_edge, self.T_feat = F_base, T_base
+        else:
+            same = ((name_of[self.t_src] >= 0) &
+                    (name_of[self.t_src] == name_of[self.t_dst])).astype(float)
+            self.F_edge = np.zeros((E, N_FEATURES))
+            self.T_feat = np.zeros((self.T, N_FEATURES))
+            for j, f in enumerate(FEATURES):
+                if f == "step":
+                    self.F_edge[:, j] = 1.0
+                    self.T_feat[:, j] = 1.0
+                elif f == "same_road_name":
+                    self.T_feat[:, j] = same
+                elif f == "edge_familiarity":
+                    self.F_edge[:, j] = fam
+                    self.T_feat[:, j] = fam[self.t_dst]
+                elif f in DEST_FEATURES:
+                    pass                               # filled per destination
+                elif f in _B and f.startswith("turn_"):
+                    self.T_feat[:, j] = T_base[:, _B[f]]
+                else:
+                    self.F_edge[:, j] = F_base[:, _B[f]]
+                    self.T_feat[:, j] = T_base[:, _B[f]]
 
         # segment starts for reduceat (edges that have >=1 outgoing transition)
         counts = np.bincount(self.t_src, minlength=E)
         self.has_out = counts > 0
         self.seg_start = np.concatenate([[0], np.cumsum(counts)[:-1]])[self.has_out]
+
+    # ------------------------------------------------------------------
+    # Destination-dependent features
+    # ------------------------------------------------------------------
+    def dest_feat(self, dest_node: int) -> Optional[np.ndarray]:
+        """(T, n_dest_features) matrix, or None when the feature set has none.
+        away_from_goal[t] = 1 if the transition ends farther (straight line)
+        from the destination than where the incoming edge ended."""
+        if not self.dest_cols:
+            return None
+        D = self._D_cache.get(dest_node)
+        if D is None:
+            dist = np.linalg.norm(self.node_xy - self.node_xy[self.nid[dest_node]],
+                                  axis=1)
+            d_to = dist[self.e_dst[self.t_dst]]
+            d_from = dist[self.e_dst[self.t_src]]
+            D = (d_to > d_from + 1e-9).astype(float)[:, None]
+            if len(self._D_cache) > 64:
+                self._D_cache.clear()
+            self._D_cache[dest_node] = D
+        return D
+
+    def reward_T(self, w: np.ndarray, dest_node: int) -> np.ndarray:
+        """Transition rewards r(e, e') for a given destination."""
+        r = self.T_feat @ w
+        D = self.dest_feat(dest_node)
+        if D is not None:
+            r = r + D @ w[self.dest_cols]
+        return r
 
     # ------------------------------------------------------------------
     # Soft value iteration (backward pass)
@@ -91,7 +171,7 @@ class RouteMDP:
         Returned vector is indexed by edge id (value of *having arrived via e*).
         """
         if r_T is None:
-            r_T = self.T_feat @ w
+            r_T = self.reward_T(w, dest_node)
         term = self.e_dst == self.nid[dest_node]
         V = np.full(self.E, NEG)
         V[term] = 0.0
@@ -116,7 +196,7 @@ class RouteMDP:
         diverges when a cycle has non-negative reward).  Shape (H, E).
         """
         if r_T is None:
-            r_T = self.T_feat @ w
+            r_T = self.reward_T(w, dest_node)
         term = self.e_dst == self.nid[dest_node]
         L = np.full((H, self.E), NEG)
         L[0, term] = 0.0
@@ -141,15 +221,18 @@ class RouteMDP:
     # ------------------------------------------------------------------
     def expected_counts(self, w: np.ndarray, L: np.ndarray, origin: int,
                         dest_node: int, acc_T: np.ndarray, acc_0: np.ndarray,
-                        r_T: Optional[np.ndarray] = None) -> float:
+                        r_T: Optional[np.ndarray] = None,
+                        acc_D: Optional[np.ndarray] = None) -> float:
         """
         Exact forward pass for the finite-horizon policy.  Adds the expected
         transition / start-edge mass for one (o, d) pair to acc_T / acc_0 and
         returns log Z(o) = log sum over all <=H-edge paths from o to d.
+        `acc_D` (n_dest,) accumulates expected destination-dependent features.
         """
         H = L.shape[0]
         if r_T is None:
-            r_T = self.T_feat @ w
+            r_T = self.reward_T(w, dest_node)
+        D_feat = self.dest_feat(dest_node) if acc_D is not None else None
         es = np.array(self.out_edges[self.nid[origin]], dtype=int)
         if len(es) == 0:
             return NEG
@@ -170,6 +253,8 @@ class RouteMDP:
             pi[~live_src | (L[k][self.t_src] <= NEG / 2)] = 0.0
             m = D[self.t_src] * pi
             acc_T += m
+            if D_feat is not None:
+                acc_D += m @ D_feat
             D = np.bincount(self.t_dst, weights=m, minlength=self.E)
             D[term] = 0.0
             if D.sum() < 1e-8:
@@ -186,8 +271,12 @@ class RouteMDP:
         """Sum of phi over the whole trajectory (start edge + transitions)."""
         ids = self.traj_edge_ids(traj)
         f = self.F_edge[ids[0]].copy()
+        D = self.dest_feat(traj["destination"])
         for a, b in zip(ids[:-1], ids[1:]):
-            f += self.T_feat[self.tid[(a, b)]]
+            t = self.tid[(a, b)]
+            f += self.T_feat[t]
+            if D is not None:
+                f[self.dest_cols] += D[t]
         return f
 
     def step_log_probs(self, w: np.ndarray, traj: dict, H: int = 80):
@@ -198,7 +287,7 @@ class RouteMDP:
         """
         L = self.soft_values_levels(w, traj["destination"], H)
         ids = self.traj_edge_ids(traj)
-        r_T = self.T_feat @ w
+        r_T = self.reward_T(w, traj["destination"])
         out = []
         es = np.array(self.out_edges[self.nid[traj["origin"]]], dtype=int)
         lg = self.F_edge[es] @ w + L[H - 1][es]
@@ -219,14 +308,61 @@ class RouteMDP:
     # ------------------------------------------------------------------
     # Route generation
     # ------------------------------------------------------------------
+    def max_reward_route(self, origin: int, destination: int,
+                         w: np.ndarray) -> list[int]:
+        """
+        MAP route under the finite-horizon MaxEnt model: P(path) ~ exp(w.f(path)),
+        so the most likely path is the maximum-reward one.  Dijkstra over
+        edge-states with cost -r(e, e') (valid when every reward is <= 0).
+        Exact and independent of soft-value convergence.
+        """
+        r_T = self.reward_T(w, destination)
+        es = np.array(self.out_edges[self.nid[origin]], dtype=int)
+        term = self.e_dst == self.nid[destination]
+        dist, prev, pq = {}, {}, []
+        for e in es:
+            c = float(-(self.F_edge[e] @ w))
+            dist[int(e)] = c
+            prev[int(e)] = None
+            heapq.heappush(pq, (c, int(e)))
+        goal = None
+        while pq:
+            c, e = heapq.heappop(pq)
+            if c > dist.get(e, np.inf):
+                continue
+            if term[e]:
+                goal = e
+                break
+            for e2 in self.out_edges[self.e_dst[e]]:
+                nc = c - float(r_T[self.tid[(e, e2)]])
+                if nc < dist.get(e2, np.inf):
+                    dist[e2] = nc
+                    prev[e2] = e
+                    heapq.heappush(pq, (nc, e2))
+        if goal is None:
+            return []
+        chain = []
+        e = goal
+        while e is not None:
+            chain.append(e)
+            e = prev[e]
+        chain.reverse()
+        nodes = [self.nodes[self.e_src[chain[0]]]]
+        nodes += [self.nodes[self.e_dst[e]] for e in chain]
+        return nodes
+
     def most_likely_route(self, origin: int, destination: int,
                           w: np.ndarray) -> list[int]:
         """
         Viterbi route under pi_w: the path maximising prod pi(a|s).
-        Dijkstra over edge-states with non-negative cost V(s) - Q(s, a).
+        Uses the exact max-reward Dijkstra when all rewards are <= 0 (the
+        infinite-horizon soft values below can diverge: with branching b the
+        sum over all paths grows like (b*e^r)^k, so V need not exist).
         """
+        r_T = self.reward_T(w, destination)
+        if r_T.max() <= 0 and (self.F_edge @ w).max() <= 0:
+            return self.max_reward_route(origin, destination, w)
         V = self.soft_values(w, destination)
-        r_T = self.T_feat @ w
         es, lg = self.start_logits(w, V, origin)
         if len(es) == 0:
             return []
@@ -284,7 +420,7 @@ class RouteMDP:
                           rng: np.random.Generator, max_steps: int = 120):
         """Draw one trajectory from the MaxEnt policy (stochastic expert)."""
         V = self.soft_values(w, destination)
-        r_T = self.T_feat @ w
+        r_T = self.reward_T(w, destination)
         es, lg = self.start_logits(w, V, origin)
         if len(es) == 0 or lg.max() <= NEG / 2:
             return None

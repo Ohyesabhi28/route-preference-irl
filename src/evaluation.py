@@ -96,6 +96,32 @@ def policy_step_stats(G, trajectories, weights, mdp=None, ks=(1, 3)):
     return float(np.mean(lls)), {k: float(np.mean(v)) for k, v in hits.items()}
 
 
+def policy_step_stats_per_trip(G, trajectories, weights, mdp=None, ks=(1, 3)):
+    """
+    Same quantities as `policy_step_stats` but one value per trip:
+    mean log pi per step, trip NLL, and top-k hit rate over the trip's real
+    choice junctions (NaN if a trip has none).
+    """
+    from mdp import RouteMDP
+    mdp = mdp or RouteMDP(G)
+    out = {"Log-Likelihood": [], "Trip NLL": []}
+    for k in ks:
+        out[f"Top-{k} Accuracy"] = []
+    for traj in trajectories:
+        lps, hits = [], {k: [] for k in ks}
+        for lp, rank, n_opt in mdp.step_log_probs(weights, traj):
+            lps.append(lp)
+            if n_opt > 1:
+                for k in ks:
+                    hits[k].append(rank < k)
+        out["Log-Likelihood"].append(float(np.mean(lps)) if lps else np.nan)
+        out["Trip NLL"].append(-float(np.sum(lps)) if lps else np.nan)
+        for k in ks:
+            out[f"Top-{k} Accuracy"].append(
+                float(np.mean(hits[k])) if hits[k] else np.nan)
+    return {k: np.asarray(v) for k, v in out.items()}
+
+
 # ──────────────────────────────────────────────────────────────
 # Full evaluation suite
 # ──────────────────────────────────────────────────────────────
@@ -105,11 +131,17 @@ def evaluate_all(G: nx.MultiDiGraph,
                   irl_weights: np.ndarray,
                   myopic_clf=None,
                   n_eval: int = None,
-                  oracle_weights: np.ndarray = None) -> dict:
+                  oracle_weights: np.ndarray = None,
+                  return_per_trip: bool = False):
     """
     Route-level metrics for IRL and baselines on held-out trajectories, plus
     junction-level metrics (log-likelihood, top-k).  `oracle_weights`, if given,
     adds the simulator's true reward as an upper bound.
+
+    With `return_per_trip=True` returns (results, per_trip) where per_trip is
+    {method: {metric: np.ndarray over test trips}} for CIs / paired tests
+    (see metrics.summarize_per_trip).  Myopic junction metrics are only
+    available as aggregates.
     """
     from baselines import dijkstra_shortest, dijkstra_fastest
     from mdp import RouteMDP
@@ -129,6 +161,7 @@ def evaluate_all(G: nx.MultiDiGraph,
             o, d, oracle_weights)
 
     results = {}
+    per_trip = {}
     for name, route_fn in methods.items():
         J, F, L = [], [], []
         for traj in test:
@@ -144,19 +177,27 @@ def evaluate_all(G: nx.MultiDiGraph,
             "Edge F1": float(np.mean(F)),
             "Path Length Ratio": float(np.nanmean(L)),
         }
+        per_trip[name] = {"Edge Jaccard": np.asarray(J), "Edge F1": np.asarray(F),
+                          "Path Length Ratio": np.asarray(L)}
 
     print("[Evaluating junction-level metrics ...]")
     ll, topk = policy_step_stats(G, test, irl_weights, mdp)
     results["IRL (MaxEnt)"].update({
         "Top-1 Accuracy": topk[1], "Top-3 Accuracy": topk[3], "Log-Likelihood": ll})
+    per_trip["IRL (MaxEnt)"].update(
+        policy_step_stats_per_trip(G, test, irl_weights, mdp))
     if oracle_weights is not None:
         ll, topk = policy_step_stats(G, test, oracle_weights, mdp)
         results["Oracle (true reward)"].update({
             "Top-1 Accuracy": topk[1], "Top-3 Accuracy": topk[3], "Log-Likelihood": ll})
+        per_trip["Oracle (true reward)"].update(
+            policy_step_stats_per_trip(G, test, oracle_weights, mdp))
     if myopic_clf is not None and myopic_clf.trained:
         ll, topk = myopic_clf.step_stats(test)
         results["Myopic-Classifier"].update({
             "Top-1 Accuracy": topk[1], "Top-3 Accuracy": topk[3], "Log-Likelihood": ll})
+    if return_per_trip:
+        return results, per_trip
     return results
 
 

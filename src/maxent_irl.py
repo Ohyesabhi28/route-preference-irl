@@ -20,9 +20,38 @@ import networkx as nx
 from scipy.optimize import minimize
 
 from config import (
-    N_FEATURES, IRL_N_ITERATIONS, WEIGHTS_SAVE_PATH, REGULARIZATION_L2, FEATURES
+    N_FEATURES, IRL_N_ITERATIONS, WEIGHTS_SAVE_PATH, REGULARIZATION_L2, FEATURES,
+    MAX_HORIZON
 )
 from mdp import RouteMDP
+
+
+# ---- multiprocessing workers (one MDP copy per process) ---------------------
+_W = {}
+
+
+def _worker_init(G):
+    _W["mdp"] = RouteMDP(G)
+
+
+def _worker_task(args):
+    """Backward + forward pass for a chunk of destinations."""
+    w, horizon, items = args
+    mdp = _W["mdp"]
+    acc_T = np.zeros(mdp.T)
+    acc_0 = np.zeros(mdp.E)
+    acc_D = np.zeros(len(mdp.dest_cols)) if mdp.dest_cols else None
+    logZ = 0.0
+    for d, origins in items:
+        r_T = mdp.reward_T(w, d)
+        L = mdp.soft_values_levels(w, d, horizon, r_T=r_T)
+        for o in origins:
+            logZ += mdp.expected_counts(w, L, o, d, acc_T, acc_0, r_T=r_T,
+                                        acc_D=acc_D)
+    f = acc_T @ mdp.T_feat + acc_0 @ mdp.F_edge
+    if acc_D is not None:
+        f[mdp.dest_cols] += acc_D
+    return logZ, f
 
 
 class MaxEntIRL:
@@ -30,11 +59,14 @@ class MaxEntIRL:
                  G: nx.MultiDiGraph,
                  n_iter: int = IRL_N_ITERATIONS,
                  l2: float = REGULARIZATION_L2,
-                 horizon: int = 80):
+                 horizon: int = MAX_HORIZON,
+                 n_workers: int = None):
         self.G = G
         self.n_iter = n_iter
         self.l2 = l2
         self.horizon = horizon
+        self.n_workers = n_workers
+        self._pool = None
         self.mdp = RouteMDP(G)
         self.weights = np.zeros(N_FEATURES)
         self.history = []          # (iter, nll, grad_norm)
@@ -43,16 +75,27 @@ class MaxEntIRL:
     def _objective(self, w, trajs, f_exp, by_dest):
         """Average negative log-likelihood and its gradient."""
         mdp = self.mdp
-        r_T = mdp.T_feat @ w
-        acc_T = np.zeros(mdp.T)
-        acc_0 = np.zeros(mdp.E)
-        logZ = 0.0
-        for d, idx in by_dest.items():
-            L = mdp.soft_values_levels(w, d, self.horizon, r_T=r_T)
-            for i in idx:
-                logZ += mdp.expected_counts(w, L, trajs[i]["origin"], d,
-                                            acc_T, acc_0, r_T=r_T)
-        f_pi = acc_T @ mdp.T_feat + acc_0 @ mdp.F_edge
+        if self._pool is not None:
+            chunks = self._chunks
+            res = self._pool.map(_worker_task,
+                                 [(w, self.horizon, c) for c in chunks])
+            logZ = sum(r[0] for r in res)
+            f_pi = np.sum([r[1] for r in res], axis=0)
+        else:
+            acc_T = np.zeros(mdp.T)
+            acc_0 = np.zeros(mdp.E)
+            acc_D = np.zeros(len(mdp.dest_cols)) if mdp.dest_cols else None
+            logZ = 0.0
+            for d, idx in by_dest.items():
+                r_T = mdp.reward_T(w, d)
+                L = mdp.soft_values_levels(w, d, self.horizon, r_T=r_T)
+                for i in idx:
+                    logZ += mdp.expected_counts(w, L, trajs[i]["origin"], d,
+                                                acc_T, acc_0, r_T=r_T,
+                                                acc_D=acc_D)
+            f_pi = acc_T @ mdp.T_feat + acc_0 @ mdp.F_edge
+            if acc_D is not None:
+                f_pi[mdp.dest_cols] += acc_D
         n = len(trajs)
         ll = (float(w @ f_exp) - logZ) / n
         grad = -(f_exp - f_pi) / n + self.l2 * w
@@ -72,6 +115,16 @@ class MaxEntIRL:
               f"mu_expert/traj = {(f_exp / len(trajs)).round(3)}")
 
         w_init = np.zeros(N_FEATURES) if w0 is None else w0.copy()
+
+        import os as _os
+        nw = self.n_workers if self.n_workers is not None else max(1, (_os.cpu_count() or 2) - 1)
+        if nw > 1 and len(by_dest) > 50:
+            import multiprocessing as mp
+            items = [(d, [trajs[i]["origin"] for i in idx]) for d, idx in by_dest.items()]
+            n_chunks = nw * 4
+            self._chunks = [items[k::n_chunks] for k in range(n_chunks)]
+            self._pool = mp.Pool(nw, initializer=_worker_init, initargs=(self.G,))
+            print(f"[MaxEntIRL] parallel: {nw} workers, {n_chunks} chunks")
         self.history = []
         t0 = time.time()
         state = {"it": 0}
@@ -91,8 +144,14 @@ class MaxEntIRL:
                       f"|grad| = {np.linalg.norm(g):.5f}  ({time.time()-t0:.0f}s)")
             state["it"] += 1
 
-        res = minimize(fun, w_init, jac=True, method="L-BFGS-B", callback=cb,
-                       options={"maxiter": self.n_iter, "gtol": 1e-5})
+        try:
+            res = minimize(fun, w_init, jac=True, method="L-BFGS-B", callback=cb,
+                           options={"maxiter": self.n_iter, "gtol": 1e-5})
+        finally:
+            if self._pool is not None:
+                self._pool.close()
+                self._pool.join()
+                self._pool = None
         self.weights = res.x
         print(f"[MaxEntIRL] Done in {time.time()-t0:.0f}s – {res.message}")
         print("[MaxEntIRL] Learned weights:")

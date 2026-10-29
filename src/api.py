@@ -29,11 +29,21 @@ from flask_cors import CORS
 
 from config import (
     WEIGHTS_SAVE_PATH, RESULTS_DIR, TRAJ_SAVE_PATH,
-    FEATURES, TRUE_WEIGHTS, SF_BBOX
+    FEATURES, TRUE_WEIGHTS, REGION_BBOX, REGION_NAME, SYNTHETIC, FEATURE_SET
 )
+import region
 
-app = Flask(__name__)
+DASHBOARD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "dashboard")
+
+app = Flask(__name__, static_folder=DASHBOARD_DIR, static_url_path="/static-dashboard")
 CORS(app)
+
+
+@app.route("/")
+def dashboard():
+    """Serve the dashboard over http:// (map tile servers reject file:// pages)."""
+    from flask import send_from_directory
+    return send_from_directory(DASHBOARD_DIR, "index.html")
 
 # ──────────────────────────────────────────────────────────────
 # Global state (populated lazily)
@@ -57,15 +67,12 @@ def _log(msg: str):
 
 def _load_assets():
     """Load graph, weights, trajectories, and results if they exist."""
-    from graph_builder import build_graph
-
     if _state["G"] is None:
         _log("Loading graph …")
-        _state["G"] = build_graph()
+        _state["G"] = region.load_graph()
 
-    if _state["data"] is None and os.path.exists(TRAJ_SAVE_PATH):
-        from trajectory_generator import load_trajectories
-        _state["data"] = load_trajectories()
+    if _state["data"] is None and region.data_exists():
+        _state["data"] = region.load_data(_state["G"])
 
     if _state["irl"] is None and os.path.exists(WEIGHTS_SAVE_PATH):
         from maxent_irl import MaxEntIRL
@@ -79,9 +86,39 @@ def _load_assets():
             _state["clf"] = clf
 
     results_path = os.path.join(RESULTS_DIR, "evaluation_results.json")
+    b1_path = os.path.join(RESULTS_DIR, "b1_results.json")
     if _state["results"] is None and os.path.exists(results_path):
         with open(results_path) as f:
             _state["results"] = json.load(f)
+    elif _state["results"] is None and os.path.exists(b1_path):
+        _state["results"] = _results_from_b1(b1_path)
+
+
+def _results_from_b1(path):
+    """Flatten run_b1.py output into the {method: {metric: mean}} table the
+    dashboard expects; the calibrated v2/v3 model is shown as 'IRL (MaxEnt)'."""
+    with open(path) as f:
+        summ = json.load(f)["summary"]
+    cal = [k for k in summ if k == f"IRL-{FEATURE_SET} (calibrated)"]
+    out = {}
+    for name, m in summ.items():
+        if name.startswith("IRL") and name not in cal:
+            continue
+        label = "IRL (MaxEnt)" if name in cal else name
+        out[label] = {k: v["mean"] for k, v in m.items()}
+    return out
+
+
+def _route_weights(irl):
+    """Weights used for route generation: the raw weights plus the extra
+    length penalty alpha chosen on validation data by run_b1.py (if present)."""
+    w = irl.weights.copy()
+    b1_path = os.path.join(RESULTS_DIR, "b1_results.json")
+    if os.path.exists(b1_path) and "length" in FEATURES:
+        with open(b1_path) as f:
+            alpha = json.load(f).get("alpha_selected", 0.0)
+        w[FEATURES.index("length")] -= alpha
+    return w
 
 
 def _run_pipeline_bg():
@@ -118,6 +155,11 @@ def status():
         "trajectories":    _state["data"] is not None,
         "evaluation_done": _state["results"] is not None,
         "training":        _state["training"],
+        "irl_weights_ready": _state["irl"] is not None,
+        "region":          REGION_NAME,
+        "synthetic":       SYNTHETIC,
+        "n_train":         len(_state["data"]["train"]) if _state["data"] else None,
+        "n_test":          len(_state["data"]["test"]) if _state["data"] else None,
         "error":           _state["error"],
         "log":             _state["log"][-20:],
     })
@@ -144,7 +186,9 @@ def graph_stats():
     return jsonify({
         "n_nodes":   G.number_of_nodes(),
         "n_edges":   G.number_of_edges(),
-        "bbox":      SF_BBOX,
+        "bbox":      REGION_BBOX,
+        "region":    REGION_NAME,
+        "synthetic": SYNTHETIC,
         "sample_nodes": nodes_out,
     })
 
@@ -156,13 +200,13 @@ def weights():
     if irl is None:
         return jsonify({"error": "IRL not trained"}), 503
 
-    true_w = np.array(TRUE_WEIGHTS, dtype=np.float64)
-    true_w = true_w / (np.linalg.norm(true_w) + 1e-9)
+    true_w = np.array(TRUE_WEIGHTS, dtype=np.float64).tolist() if SYNTHETIC else None
 
     return jsonify({
         "features":     FEATURES,
         "learned":      irl.weights.tolist(),
-        "true":         true_w.tolist(),
+        "true":         true_w,
+        "synthetic":    SYNTHETIC,
     })
 
 
@@ -246,7 +290,8 @@ def route():
     if origin is None or dest is None:
         if _state["data"]:
             import random
-            traj   = random.choice(_state["data"]["test"])
+            pool   = [t for t in _state["data"]["test"] if len(t["edges"]) >= 12] or _state["data"]["test"]
+            traj   = random.choice(pool)
             origin = traj["origin"]
             dest   = traj["destination"]
             expert_nodes = traj["nodes"]
@@ -262,9 +307,10 @@ def route():
     # Generate route
     try:
         if method == "irl" and irl is not None:
-            from mdp import RouteMDP
-            mdp   = RouteMDP(G)
-            nodes = mdp.sample_route(origin, dest, irl.weights)
+            if _state.get("mdp") is None:
+                from mdp import RouteMDP
+                _state["mdp"] = RouteMDP(G)
+            nodes = _state["mdp"].most_likely_route(origin, dest, _route_weights(irl))
         elif method == "shortest":
             from baselines import dijkstra_shortest
             nodes = dijkstra_shortest(G, origin, dest)
@@ -297,6 +343,151 @@ def route():
     })
 
 
+# ──────────────────────────────────────────────────────────────
+# Maps-style endpoints: all route options for one trip in a single call
+# ──────────────────────────────────────────────────────────────
+def _edge_between(G, u, v):
+    k = min(G[u][v], key=lambda kk: G[u][v][kk].get("length", 1e9))
+    return G[u][v][k]
+
+
+def _route_stats(G, nodes):
+    """Distance, free-flow time (speed-limit based), turns and road mix of a node path."""
+    if len(nodes) < 2:
+        return None
+    dist = tsec = resid = 0.0
+    turns = sharp = 0
+    prev_b = None
+    for u, v in zip(nodes[:-1], nodes[1:]):
+        d = _edge_between(G, u, v)
+        L = float(d.get("length", 0.0))
+        dist += L
+        tsec += float(d.get("travel_time", L / 8.3))
+        f = d.get("features")
+        if f is not None and len(f) > 5 and f[5] > 0.5:
+            resid += L
+        b = float(d.get("bearing", 0.0))
+        if prev_b is not None:
+            ang = abs(((b - prev_b + 180.0) % 360.0) - 180.0)
+            turns += ang >= 30
+            sharp += ang >= 90
+        prev_b = b
+    return {
+        "distance_m": round(dist),
+        "time_s": round(tsec),
+        "turns": int(turns),
+        "sharp_turns": int(sharp),
+        "pct_residential": round(100.0 * resid / dist) if dist else 0,
+        "n_edges": len(nodes) - 1,
+    }
+
+
+def _coords(G, nodes):
+    return [[G.nodes[n]["y"], G.nodes[n]["x"]] for n in nodes]
+
+
+def _nearest_node(G, lat, lon):
+    if _state.get("xy") is None:
+        ids = list(G.nodes())
+        _state["xy"] = (ids, np.array([[G.nodes[n]["y"], G.nodes[n]["x"]] for n in ids]))
+    ids, xy = _state["xy"]
+    dlat = xy[:, 0] - lat
+    dlon = (xy[:, 1] - lon) * np.cos(np.radians(lat))
+    return ids[int(np.argmin(dlat * dlat + dlon * dlon))]
+
+
+def _jaccard_nodes(a, b):
+    ea = set(zip(a[:-1], a[1:]))
+    eb = set(zip(b[:-1], b[1:]))
+    return len(ea & eb) / len(ea | eb) if (ea | eb) else 0.0
+
+
+@app.route("/api/trips")
+def trips():
+    """A small, fixed set of real test trips the user can replay."""
+    _load_assets()
+    data, G = _state["data"], _state["G"]
+    if data is None or G is None:
+        return jsonify({"trips": []})
+    import random
+    rnd = random.Random(7)
+    idx = [i for i, t in enumerate(data["test"]) if len(t["edges"]) >= 15]
+    rnd.shuffle(idx)
+    out = []
+    for i in idx[:12]:
+        t = data["test"][i]
+        st = _route_stats(G, t["nodes"])
+        out.append({"index": i, "distance_m": st["distance_m"], "time_s": st["time_s"],
+                    "hour": t.get("hour"), "weekday": t.get("weekday"),
+                    "from": _coords(G, t["nodes"][:1])[0], "to": _coords(G, t["nodes"][-1:])[0]})
+    out.sort(key=lambda x: x["distance_m"])
+    return jsonify({"trips": out})
+
+
+@app.route("/api/routes", methods=["POST"])
+def routes():
+    """All route options for one trip. Body: {trip_index} | {origin_ll, dest_ll} | {} (random)."""
+    _load_assets()
+    G, irl, data = _state["G"], _state["irl"], _state["data"]
+    if G is None or irl is None:
+        return jsonify({"error": "Model not ready"}), 503
+    body = request.get_json(silent=True) or {}
+    expert = None
+    if body.get("trip_index") is not None and data:
+        t = data["test"][int(body["trip_index"])]
+        origin, dest, expert = t["origin"], t["destination"], t["nodes"]
+    elif body.get("origin_ll") and body.get("dest_ll"):
+        origin = _nearest_node(G, *body["origin_ll"])
+        dest   = _nearest_node(G, *body["dest_ll"])
+    else:
+        import random
+        pool = [t for t in (data["test"] if data else []) if len(t["edges"]) >= 12]
+        if pool:
+            t = random.choice(pool)
+            origin, dest, expert = t["origin"], t["destination"], t["nodes"]
+        else:
+            ids = list(G.nodes()); origin, dest = random.sample(ids, 2)
+    if origin == dest:
+        return jsonify({"error": "Origin and destination snap to the same junction"}), 400
+
+    if _state.get("mdp") is None:
+        from mdp import RouteMDP
+        _state["mdp"] = RouteMDP(G)
+    from baselines import dijkstra_shortest, dijkstra_fastest
+    paths = {
+        "irl":      lambda: _state["mdp"].most_likely_route(origin, dest, _route_weights(irl)),
+        "shortest": lambda: dijkstra_shortest(G, origin, dest),
+        "fastest":  lambda: dijkstra_fastest(G, origin, dest),
+    }
+    if _state["clf"]:
+        paths["myopic"] = lambda: _state["clf"].predict_route(G, origin, dest)
+    out = {}
+    for name, fn in paths.items():
+        try:
+            nodes = fn()
+        except Exception:
+            nodes = []
+        if len(nodes) < 2 or nodes[-1] != dest:
+            continue
+        st = _route_stats(G, nodes)
+        if expert:
+            st["overlap_pct"] = round(100 * _jaccard_nodes(nodes, expert))
+        st["coords"] = _coords(G, nodes)
+        st["sig"] = hash(tuple(nodes)) & 0xffffffff
+        out[name] = st
+    resp = {
+        "origin": {"lat": G.nodes[origin]["y"], "lon": G.nodes[origin]["x"]},
+        "destination": {"lat": G.nodes[dest]["y"], "lon": G.nodes[dest]["x"]},
+        "routes": out,
+        "driver": None,
+    }
+    if expert:
+        st = _route_stats(G, expert)
+        st["coords"] = _coords(G, expert)
+        resp["driver"] = st
+    return jsonify(resp)
+
+
 @app.route("/api/run_pipeline", methods=["POST"])
 def run_pipeline():
     if _state["training"]:
@@ -305,8 +496,8 @@ def run_pipeline():
     # Reset cached weights so pipeline re-trains
     if os.path.exists(WEIGHTS_SAVE_PATH):
         os.remove(WEIGHTS_SAVE_PATH)
-    if os.path.exists(TRAJ_SAVE_PATH):
-        os.remove(TRAJ_SAVE_PATH)
+    if SYNTHETIC and os.path.exists(TRAJ_SAVE_PATH):
+        os.remove(TRAJ_SAVE_PATH)          # real (Porto) trips are never deleted
     _state["irl"]     = None
     _state["data"]    = None
     _state["results"] = None
@@ -323,5 +514,5 @@ def run_pipeline():
 if __name__ == "__main__":
     print("[API] Initialising …")
     _load_assets()
-    print("[API] Starting Flask server on http://localhost:5000")
+    print("[API] Dashboard: http://localhost:5000   (open this, not the .html file)")
     app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)
