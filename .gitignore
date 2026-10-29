@@ -1,6 +1,7 @@
 # Python
 __pycache__/
 *.py[cod]
+*.pyc
 *.pyo
 *.pyd
 .Python
@@ -11,11 +12,17 @@ build/
 .eggs/
 *.so
 
-# Virtual environments
-venv/
+# Environment and secrets
+.env
+.env.*
 .venv/
+venv/
 env/
 ENV/
+
+# Archify & build scratch
+.archify/
+deck_build/qa/
 
 # Cache files
 cache/
@@ -42,11 +49,11 @@ report/
 
 # Presentations and PDFs (managed separately, per user instruction)
 *.pptx
+!Route_Preference_IRL_Final.pptx
 *.pdf
 
 # Project planning docs (managed separately, per user instruction)
 INNOVATION_PLAN.md
-MDP_FORMULATION.md
 PROJECT_PLAN.md
 
 # Jupyter Notebooks checkpoints

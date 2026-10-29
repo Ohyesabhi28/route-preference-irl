@@ -396,6 +396,74 @@ def _nearest_node(G, lat, lon):
     return ids[int(np.argmin(dlat * dlat + dlon * dlon))]
 
 
+
+# ── Place names (offline: street names stored in the OSM graph) ──
+import unicodedata
+
+
+def _norm(t):
+    return "".join(c for c in unicodedata.normalize("NFKD", str(t).lower()) if not unicodedata.combining(c))
+
+
+def _street_index(G):
+    """name -> list of node ids on that street; node -> set of street names."""
+    if _state.get("streets") is None:
+        by_name, by_node = {}, {}
+        for u, v, d in G.edges(data=True):
+            nm = d.get("name")
+            if isinstance(nm, list):
+                nm = nm[0] if nm else None
+            if not nm:
+                continue
+            by_name.setdefault(nm, set()).update((u, v))
+            by_node.setdefault(u, set()).add(nm)
+            by_node.setdefault(v, set()).add(nm)
+        _state["streets"] = (by_name, by_node, {n: _norm(n) for n in by_name})
+    return _state["streets"]
+
+
+@app.route("/api/places")
+def places():
+    """Autocomplete street names. ?q=boavista -> [{name, lat, lon}]"""
+    _load_assets()
+    G = _state["G"]
+    q = _norm(request.args.get("q", "")).strip()
+    if G is None or len(q) < 2:
+        return jsonify({"places": []})
+    by_name, _, normed = _street_index(G)
+    hits = [(0 if normed[n].startswith(q) or any(w.startswith(q) for w in normed[n].split()) else 1, -len(by_name[n]), n)
+            for n in by_name if q in normed[n]]
+    hits.sort()
+    out = []
+    for _, _, n in hits[:8]:
+        nodes = list(by_name[n])
+        cy = np.mean([G.nodes[x]["y"] for x in nodes]); cx = np.mean([G.nodes[x]["x"] for x in nodes])
+        best = min(nodes, key=lambda x: (G.nodes[x]["y"] - cy) ** 2 + (G.nodes[x]["x"] - cx) ** 2)
+        out.append({"name": n, "lat": G.nodes[best]["y"], "lon": G.nodes[best]["x"]})
+    return jsonify({"places": out})
+
+
+@app.route("/api/place_at")
+def place_at():
+    """Name for a coordinate: the street(s) at the nearest junction. ?lat=&lon="""
+    _load_assets()
+    G = _state["G"]
+    try:
+        lat, lon = float(request.args["lat"]), float(request.args["lon"])
+    except (KeyError, ValueError):
+        return jsonify({"name": None}), 400
+    node = _nearest_node(G, lat, lon)
+    _, by_node, _ = _street_index(G)
+    names = sorted(by_node.get(node, []))
+    if len(names) >= 2:
+        label = " & ".join(names[:2])
+    elif names:
+        label = names[0]
+    else:
+        label = None
+    return jsonify({"name": label})
+
+
 def _jaccard_nodes(a, b):
     ea = set(zip(a[:-1], a[1:]))
     eb = set(zip(b[:-1], b[1:]))
@@ -422,6 +490,63 @@ def trips():
                     "from": _coords(G, t["nodes"][:1])[0], "to": _coords(G, t["nodes"][-1:])[0]})
     out.sort(key=lambda x: x["distance_m"])
     return jsonify({"trips": out})
+
+
+
+# ── Explainability: exact per-feature decomposition of a route's reward ──
+_FEATURE_TEXT = {
+    # feature: (label, unit scale shown to the user, unit, good-if-more?)
+    "length":           ("distance",                    100.0, "m"),
+    "travel_time":      ("free-flow travel time",       60.0,  "s"),
+    "step":             ("number of road segments",     1.0,   ""),
+    "road_motorway":    ("motorway/trunk segments",     1.0,   ""),
+    "road_primary":     ("primary/secondary roads",     1.0,   ""),
+    "turn_slight":      ("slight turns",                1.0,   ""),
+    "turn_sharp":       ("sharp turns / U-turns",       1.0,   ""),
+    "num_lanes":        ("lane count",                  2.0,   ""),
+    "same_road_name":   ("continuing on the same road", 1.0,   ""),
+    "away_from_goal":   ("steps moving away from the destination", 1.0, ""),
+    "edge_familiarity": ("use of roads taxis travel often", 1.0, ""),
+}
+
+
+def _route_edges(G, nodes):
+    edges = []
+    for u, v in zip(nodes[:-1], nodes[1:]):
+        k = min(G[u][v], key=lambda kk: G[u][v][kk].get("length", 1e9))
+        edges.append((u, v, k))
+    return edges
+
+
+def _explain_route(mdp, G, nodes, w):
+    """Total reward R = w.phi and each feature's contribution w_i * phi_i."""
+    try:
+        f = mdp.traj_features({"edges": _route_edges(G, nodes), "destination": nodes[-1]})
+    except Exception:
+        return None
+    contrib = f * w
+    return {"total": float(contrib.sum()),
+            "features": {n: {"count": float(f[i]), "contrib": float(contrib[i])}
+                         for i, n in enumerate(FEATURES)}}
+
+
+def _why(exp, ref, ref_name):
+    """Plain-language reasons why `exp` scores higher/lower than `ref` under the learned reward."""
+    diff = []
+    for n in FEATURES:
+        d = exp["features"][n]["contrib"] - ref["features"][n]["contrib"]
+        diff.append((abs(d), d, n))
+    diff.sort(reverse=True)
+    lines = []
+    for _, d, n in diff[:4]:
+        if abs(d) < 0.05:
+            continue
+        label, scale, unit = _FEATURE_TEXT[n]
+        a, b = exp["features"][n]["count"] * scale, ref["features"][n]["count"] * scale
+        fmt = (lambda x: f"{x:.0f}{unit}") if unit else (lambda x: f"{x:.1f}" if n == "edge_familiarity" else f"{x:.0f}")
+        lines.append({"feature": n, "delta": round(d, 2), "text":
+                      f"{label}: {fmt(a)} vs {fmt(b)} on the {ref_name} route"})
+    return {"vs": ref_name, "delta_total": round(exp["total"] - ref["total"], 2), "reasons": lines}
 
 
 @app.route("/api/routes", methods=["POST"])
@@ -474,7 +599,18 @@ def routes():
             st["overlap_pct"] = round(100 * _jaccard_nodes(nodes, expert))
         st["coords"] = _coords(G, nodes)
         st["sig"] = hash(tuple(nodes)) & 0xffffffff
+        st["_nodes"] = nodes
         out[name] = st
+    # explanations: reward breakdown of every route; each route compared with "shortest"
+    w_exp = _route_weights(irl)
+    expl = {k: _explain_route(_state["mdp"], G, v["_nodes"], w_exp) for k, v in out.items()}
+    for k, v in out.items():
+        e = expl[k]
+        if e is not None:
+            v["explain"] = e
+            if k != "shortest" and expl.get("shortest") is not None and v["sig"] != out["shortest"]["sig"]:
+                v["why"] = _why(e, expl["shortest"], "shortest")
+        del v["_nodes"]
     resp = {
         "origin": {"lat": G.nodes[origin]["y"], "lon": G.nodes[origin]["x"]},
         "destination": {"lat": G.nodes[dest]["y"], "lon": G.nodes[dest]["x"]},
@@ -484,6 +620,10 @@ def routes():
     if expert:
         st = _route_stats(G, expert)
         st["coords"] = _coords(G, expert)
+        try:
+            st["explain"] = _explain_route(_state["mdp"], G, expert, w_exp)
+        except Exception:
+            pass
         resp["driver"] = st
     return jsonify(resp)
 
