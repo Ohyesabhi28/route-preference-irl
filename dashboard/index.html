@@ -3,1138 +3,450 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>IRL Route Intelligence — San Francisco</title>
-  <meta name="description" content="Inverse Reinforcement Learning for Route Preference Learning on the San Francisco road network. Visualise learned driver preferences, compare routes, and explore MaxEnt IRL results." />
+  <title>Porto Routes — learned from real drivers</title>
 
-  <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
-
-  <!-- Leaflet for map -->
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-  <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
   <style>
-    /* ── Reset & Tokens ─────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
     :root {
-      --bg-base:    #060b18;
-      --bg-card:    rgba(10, 20, 45, 0.85);
-      --bg-panel:   rgba(8, 16, 38, 0.9);
-      --border:     rgba(0, 212, 255, 0.15);
-      --border-glow:rgba(0, 212, 255, 0.4);
-      --cyan:       #00d4ff;
-      --cyan-dim:   rgba(0, 212, 255, 0.2);
-      --teal:       #00ffcc;
-      --violet:     #9b59f5;
-      --amber:      #f5c542;
-      --red:        #ff4d6d;
-      --green:      #39ff7e;
-      --text-1:     #e8f4ff;
-      --text-2:     #7aa8cc;
-      --text-3:     #4a7090;
-      --font:       'Inter', sans-serif;
-      --mono:       'JetBrains Mono', monospace;
-      --radius:     12px;
-      --radius-sm:  8px;
-      --shadow:     0 8px 32px rgba(0,0,0,0.6);
-      --glow-cyan:  0 0 20px rgba(0, 212, 255, 0.3);
-      --glow-teal:  0 0 20px rgba(0, 255, 204, 0.3);
+      --blue: #1a73e8; --blue-bg: #e8f0fe; --green: #188038; --red: #d93025; --amber: #e37400;
+      --text: #202124; --muted: #5f6368; --faint: #80868b; --line: #dadce0; --surface: #fff;
+      --shadow: 0 1px 2px rgba(60,64,67,.3), 0 2px 6px 2px rgba(60,64,67,.15);
+      --font: 'Roboto', system-ui, 'Segoe UI', Arial, sans-serif;
     }
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; }
+    body { font-family: var(--font); font-size: 14px; color: var(--text); background: #e5e3df; }
 
-    html, body { height: 100%; overflow: hidden; }
+    /* The whole app is pinned to the viewport, so the map always fills the window. */
+    #map { position: fixed; inset: 0; z-index: 0; }
 
-    body {
-      font-family: var(--font);
-      background: var(--bg-base);
-      color: var(--text-1);
-      display: flex;
-      flex-direction: column;
-    }
+    .panel { position: fixed; z-index: 1000; background: var(--surface); border-radius: 10px; box-shadow: var(--shadow); }
 
-    /* ── Animated background grid ───────────────────── */
-    body::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      background-image:
-        linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
-      background-size: 40px 40px;
-      z-index: 0;
-      pointer-events: none;
-    }
+    /* ── Search card (top-left) ─────────────── */
+    #search { top: 16px; left: 16px; width: 400px; max-height: calc(100vh - 32px); display: flex; flex-direction: column; overflow: hidden; }
+    .brand { display: flex; align-items: center; gap: 10px; padding: 14px 16px 6px; }
+    .brand .logo { width: 28px; height: 28px; border-radius: 50%; background: var(--blue); color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 14px; }
+    .brand .t { font-size: 16px; font-weight: 500; line-height: 1.2; }
+    .brand .s { font-size: 12px; color: var(--muted); }
+    .brand .grow { flex: 1; }
+    .icon-btn { border: 0; background: none; cursor: pointer; width: 36px; height: 36px; border-radius: 50%; color: var(--muted); display: grid; place-items: center; font-size: 18px; }
+    .icon-btn:hover { background: #f1f3f4; }
 
-    /* ── Topbar ─────────────────────────────────────── */
-    #topbar {
-      position: relative;
-      z-index: 100;
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      padding: 0 24px;
-      height: 64px;
-      background: rgba(6,11,24,0.95);
-      border-bottom: 1px solid var(--border);
-      backdrop-filter: blur(12px);
-      flex-shrink: 0;
-    }
+    .inputs { display: flex; align-items: stretch; gap: 8px; padding: 8px 12px 6px 14px; }
+    .rail { display: flex; flex-direction: column; align-items: center; padding: 14px 0; gap: 3px; }
+    .rail .a { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--muted); }
+    .rail .d { width: 2px; height: 3px; background: var(--faint); border-radius: 1px; }
+    .rail .b { width: 12px; height: 12px; background: var(--red); border-radius: 50% 50% 50% 0; transform: rotate(-45deg); margin-top: 2px; }
+    .fields { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+    .field { height: 40px; border: 1px solid var(--line); border-radius: 8px; padding: 0 12px; display: flex; align-items: center; font-size: 14px; color: var(--muted); background: #fff; cursor: pointer; }
+    .field.set { color: var(--text); }
+    .field.active { border-color: var(--blue); box-shadow: 0 0 0 1px var(--blue); }
+    .swap { align-self: center; }
 
-    #logo {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      text-decoration: none;
-    }
-    #logo-icon {
-      width: 36px; height: 36px;
-      background: linear-gradient(135deg, var(--cyan), var(--violet));
-      border-radius: 8px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 18px; font-weight: 800; color: #fff;
-      box-shadow: var(--glow-cyan);
-    }
-    #logo-text {
-      font-size: 13px; font-weight: 700; line-height: 1.2;
-      color: var(--text-1);
-    }
-    #logo-sub { font-size: 10px; color: var(--text-3); font-weight: 400; }
+    .actions { display: flex; gap: 8px; padding: 6px 14px 12px; }
+    .chip { font: inherit; font-size: 13px; cursor: pointer; border: 1px solid var(--line); background: #fff; color: var(--blue); padding: 6px 14px; border-radius: 16px; }
+    .chip:hover { background: var(--blue-bg); }
+    .chip.plain { color: var(--muted); }
+    .hint { padding: 0 16px 12px; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
 
-    #topbar-title {
-      flex: 1;
-      font-size: 15px;
-      font-weight: 700;
-      background: linear-gradient(90deg, var(--cyan), var(--teal));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      letter-spacing: 0.5px;
-    }
+    .scroll { overflow-y: auto; border-top: 1px solid var(--line); }
+    .section-h { padding: 12px 16px 6px; font-size: 12px; font-weight: 500; color: var(--muted); letter-spacing: .02em; }
 
-    #status-indicator {
-      display: flex; align-items: center; gap: 8px;
-      padding: 6px 14px;
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      font-size: 12px; color: var(--text-2);
-    }
-    #status-dot {
-      width: 8px; height: 8px; border-radius: 50%;
-      background: var(--text-3);
-      transition: background 0.3s, box-shadow 0.3s;
-    }
-    #status-dot.ready   { background: var(--green);  box-shadow: 0 0 8px var(--green); }
-    #status-dot.training{ background: var(--amber);  box-shadow: 0 0 8px var(--amber);
-                          animation: pulse 1s infinite; }
-    #status-dot.error   { background: var(--red);    box-shadow: 0 0 8px var(--red); }
+    /* ── Route option cards ─────────────────── */
+    .route { display: block; width: 100%; text-align: left; font: inherit; border: 0; border-left: 4px solid transparent; background: #fff; padding: 12px 16px 12px 12px; cursor: pointer; border-bottom: 1px solid #f1f3f4; }
+    .route:hover { background: #f8f9fa; }
+    .route.sel { border-left-color: var(--blue); background: var(--blue-bg); }
+    .route .top { display: flex; align-items: baseline; gap: 10px; }
+    .route .time { font-size: 20px; font-weight: 400; }
+    .route.sel .time { color: var(--blue); }
+    .route .dist { color: var(--muted); font-size: 14px; }
+    .route .name { margin-left: auto; font-size: 13px; font-weight: 500; }
+    .route .meta { margin-top: 3px; color: var(--muted); font-size: 12.5px; }
+    .route .badge { display: inline-block; margin-top: 6px; padding: 2px 8px; border-radius: 10px; font-size: 11.5px; background: #e6f4ea; color: var(--green); }
+    .route .badge.same { background: #f1f3f4; color: var(--muted); }
+    .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; vertical-align: middle; }
 
-    @keyframes pulse {
-      0%,100% { opacity: 1; } 50% { opacity: 0.4; }
-    }
+    /* ── Real trips list ────────────────────── */
+    .trip { display: flex; align-items: center; gap: 12px; width: 100%; font: inherit; text-align: left; border: 0; background: #fff; padding: 10px 16px; cursor: pointer; }
+    .trip:hover { background: #f8f9fa; }
+    .trip .ic { width: 28px; height: 28px; border-radius: 50%; background: #f1f3f4; display: grid; place-items: center; color: var(--muted); font-size: 14px; }
+    .trip .a { font-size: 14px; }
+    .trip .b { font-size: 12px; color: var(--muted); }
 
-    #run-btn {
-      display: flex; align-items: center; gap: 6px;
-      padding: 8px 18px;
-      background: linear-gradient(135deg, var(--cyan), var(--violet));
-      border: none; border-radius: 8px;
-      color: #fff; font-family: var(--font); font-size: 13px; font-weight: 600;
-      cursor: pointer; transition: opacity 0.2s, transform 0.1s;
-      box-shadow: 0 4px 16px rgba(0,212,255,0.3);
-    }
-    #run-btn:hover  { opacity: 0.9; transform: translateY(-1px); }
-    #run-btn:active { transform: translateY(0); }
-    #run-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+    /* ── Duration bubbles on the map ────────── */
+    .bubble { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 2px 9px; font-size: 12.5px; font-weight: 500; white-space: nowrap; box-shadow: 0 1px 3px rgba(60,64,67,.3); color: var(--text); }
+    .bubble.sel { background: var(--blue); border-color: var(--blue); color: #fff; }
+    .pin-a { width: 16px; height: 16px; border-radius: 50%; background: #fff; border: 4px solid #5f6368; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
+    .pin-b { width: 22px; height: 22px; background: var(--red); border-radius: 50% 50% 50% 0; transform: rotate(-45deg); box-shadow: 0 1px 3px rgba(0,0,0,.4); display: grid; place-items: center; }
+    .pin-b::after { content: ''; width: 8px; height: 8px; border-radius: 50%; background: #fff; }
 
-    /* ── Main layout ─────────────────────────────────── */
-    #main {
-      position: relative;
-      z-index: 1;
-      flex: 1;
-      display: grid;
-      grid-template-columns: 320px 1fr 300px;
-      grid-template-rows: 1fr;
-      gap: 0;
-      overflow: hidden;
-    }
+    /* ── Model drawer (right) ───────────────── */
+    #drawer { top: 0; right: 0; bottom: 0; width: 380px; border-radius: 0; transform: translateX(105%); transition: transform .25s ease; display: flex; flex-direction: column; z-index: 1100; }
+    #drawer.open { transform: none; }
+    #drawer header { display: flex; align-items: center; padding: 10px 8px 10px 20px; border-bottom: 1px solid var(--line); }
+    #drawer header h2 { flex: 1; font-size: 16px; font-weight: 500; }
+    #drawer .body { flex: 1; overflow-y: auto; padding: 4px 20px 24px; }
+    #drawer h3 { font-size: 12px; font-weight: 500; color: var(--muted); letter-spacing: .02em; margin: 20px 0 10px; }
+    .note { color: var(--faint); font-size: 12px; line-height: 1.5; margin-top: 8px; }
+    .status { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
+    .status i { width: 9px; height: 9px; border-radius: 50%; background: var(--faint); }
+    .status i.ready { background: #1e8e3e; } .status i.training { background: #f9ab00; } .status i.error { background: var(--red); }
+    .w-row { display: grid; grid-template-columns: 86px 1fr 42px; align-items: center; gap: 8px; height: 24px; }
+    .w-name { color: var(--muted); font-size: 12.5px; }
+    .w-track { position: relative; height: 100%; }
+    .w-track::before { content: ''; position: absolute; left: 50%; top: 3px; bottom: 3px; width: 1px; background: var(--line); }
+    .w-bar { position: absolute; top: 7px; height: 10px; border-radius: 2px; background: var(--blue); }
+    .w-bar.neg { background: #a8c7fa; }
+    .w-val { text-align: right; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+    table { width: 100%; border-collapse: collapse; font-size: 12.5px; table-layout: fixed; }
+    th, td { padding: 7px 3px; text-align: right; border-bottom: 1px solid #f1f3f4; }
+    th { color: var(--muted); font-weight: 500; font-size: 11.5px; }
+    th:first-child, td:first-child { text-align: left; width: 74px; }
+    td { color: var(--muted); font-variant-numeric: tabular-nums; } td:first-child { color: var(--text); }
+    td.best { color: var(--text); font-weight: 500; background: var(--blue-bg); }
+    .chart-wrap { position: relative; height: 120px; }
+    .btn { font: inherit; cursor: pointer; padding: 8px 16px; border-radius: 18px; border: 1px solid var(--line); background: #fff; color: var(--blue); }
+    .btn:hover { background: var(--blue-bg); } .btn:disabled { opacity: .5; cursor: not-allowed; }
 
-    /* ── Sidebar shared ──────────────────────────────── */
-    .sidebar {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      padding: 16px;
-      overflow-y: auto;
-      scrollbar-width: thin;
-      scrollbar-color: var(--border) transparent;
-    }
-    .sidebar::-webkit-scrollbar { width: 4px; }
-    .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    #offline { position: fixed; z-index: 2000; inset: 0; display: none; place-items: center; background: rgba(255,255,255,.9); text-align: center; color: var(--muted); line-height: 1.8; }
+    #offline code { background: #f1f3f4; padding: 2px 8px; border-radius: 4px; color: var(--text); }
+    #toast { position: fixed; z-index: 1500; left: 50%; bottom: 28px; transform: translateX(-50%); background: #323232; color: #fff; padding: 10px 16px; border-radius: 6px; font-size: 13px; display: none; }
 
-    /* ── Cards ───────────────────────────────────────── */
-    .card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 16px;
-      backdrop-filter: blur(8px);
-      box-shadow: var(--shadow);
-      transition: border-color 0.3s;
-    }
-    .card:hover { border-color: var(--border-glow); }
-
-    .card-title {
-      font-size: 11px; font-weight: 700; letter-spacing: 1.2px;
-      text-transform: uppercase; color: var(--cyan); margin-bottom: 12px;
-      display: flex; align-items: center; gap: 6px;
-    }
-    .card-title::before {
-      content: '';
-      display: inline-block;
-      width: 3px; height: 14px;
-      background: linear-gradient(var(--cyan), var(--violet));
-      border-radius: 2px;
-    }
-
-    /* ── Map ─────────────────────────────────────────── */
-    #map-container {
-      position: relative;
-      flex: 1;
-    }
-    #map {
-      width: 100%; height: 100%;
-    }
-    .leaflet-container {
-      background: #060b18 !important;
-    }
-
-    /* Map overlay controls */
-    #map-controls {
-      position: absolute;
-      top: 12px; left: 12px;
-      z-index: 1000;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .method-btn {
-      display: flex; align-items: center; gap: 8px;
-      padding: 8px 14px;
-      background: rgba(6,11,24,0.9);
-      border: 1px solid;
-      border-radius: 8px;
-      font-size: 12px; font-weight: 600; font-family: var(--font);
-      cursor: pointer; transition: all 0.2s;
-      color: var(--text-1);
-      backdrop-filter: blur(8px);
-    }
-    .method-btn.active { background: rgba(0,212,255,0.12); }
-    .method-btn .dot {
-      width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
-    }
-
-    #route-info {
-      position: absolute;
-      bottom: 16px; left: 50%; transform: translateX(-50%);
-      z-index: 1000;
-      display: flex; gap: 10px;
-    }
-    .route-badge {
-      padding: 8px 16px;
-      background: rgba(6,11,24,0.92);
-      border: 1px solid var(--border-glow);
-      border-radius: 20px;
-      font-size: 12px; font-weight: 600;
-      backdrop-filter: blur(8px);
-      transition: all 0.3s;
-    }
-
-    /* ── Feature weights chart ───────────────────────── */
-    .chart-wrap {
-      position: relative;
-      height: 140px;
-    }
-
-    /* ── Metrics table ───────────────────────────────── */
-    .metrics-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 11px;
-    }
-    .metrics-table th {
-      text-align: right; padding: 4px 6px;
-      color: var(--text-3); font-weight: 600;
-      border-bottom: 1px solid var(--border);
-    }
-    .metrics-table th:first-child { text-align: left; }
-    .metrics-table td {
-      text-align: right; padding: 5px 6px;
-      color: var(--text-2);
-      border-bottom: 1px solid rgba(255,255,255,0.04);
-    }
-    .metrics-table td:first-child { text-align: left; color: var(--text-1); }
-    .metrics-table .best { color: var(--green); font-weight: 700; }
-    .metrics-table tr:hover td { background: rgba(0,212,255,0.04); }
-
-    /* ── Weight comparison ───────────────────────────── */
-    .weight-row {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      margin-bottom: 6px;
-    }
-    .weight-label {
-      font-size: 10px; color: var(--text-3);
-      width: 90px; flex-shrink: 0;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    .weight-bar-wrap {
-      flex: 1;
-      height: 16px;
-      background: rgba(255,255,255,0.05);
-      border-radius: 3px;
-      overflow: hidden;
-      position: relative;
-    }
-    .weight-bar {
-      height: 100%;
-      border-radius: 3px;
-      transition: width 0.6s cubic-bezier(0.4,0,0.2,1);
-    }
-    .weight-val {
-      font-family: var(--mono);
-      font-size: 10px; color: var(--text-2);
-      width: 42px; text-align: right; flex-shrink: 0;
-    }
-
-    /* ── Trajectory list ─────────────────────────────── */
-    .traj-item {
-      padding: 8px 10px;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      margin-bottom: 6px;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    .traj-item:hover {
-      border-color: var(--border-glow);
-      background: var(--cyan-dim);
-    }
-    .traj-item.active {
-      border-color: var(--cyan);
-      background: rgba(0,212,255,0.1);
-    }
-    .traj-meta {
-      font-size: 10px; color: var(--text-3);
-      display: flex; justify-content: space-between;
-    }
-
-    /* ── Log ─────────────────────────────────────────── */
-    #log-box {
-      height: 90px;
-      overflow-y: auto;
-      background: rgba(0,0,0,0.3);
-      border-radius: 6px;
-      padding: 8px;
-      font-family: var(--mono);
-      font-size: 10px;
-      color: var(--text-2);
-      scrollbar-width: thin;
-    }
-    #log-box .log-line { margin-bottom: 2px; }
-    #log-box .log-line.ok  { color: var(--green); }
-    #log-box .log-line.err { color: var(--red); }
-
-    /* ── Spinner ─────────────────────────────────────── */
-    .spinner {
-      width: 16px; height: 16px;
-      border: 2px solid rgba(255,255,255,0.1);
-      border-top-color: var(--cyan);
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-      display: inline-block;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* ── Stat pills ──────────────────────────────────── */
-    .stat-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-    }
-    .stat-pill {
-      background: rgba(0,212,255,0.07);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 10px;
-      text-align: center;
-    }
-    .stat-num {
-      font-size: 20px; font-weight: 800;
-      background: linear-gradient(135deg, var(--cyan), var(--teal));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-    .stat-label {
-      font-size: 10px; color: var(--text-3);
-      margin-top: 2px; letter-spacing: 0.5px;
-    }
-
-    /* ── Legend ──────────────────────────────────────── */
-    .legend-item {
-      display: flex; align-items: center; gap: 8px;
-      font-size: 11px; color: var(--text-2);
-      margin-bottom: 4px;
-    }
-    .legend-line {
-      width: 24px; height: 3px; border-radius: 2px; flex-shrink: 0;
-    }
-
-    /* ── Tooltip ─────────────────────────────────────── */
-    #tooltip {
-      position: fixed;
-      z-index: 9999;
-      padding: 8px 12px;
-      background: rgba(6,11,24,0.95);
-      border: 1px solid var(--border-glow);
-      border-radius: 8px;
-      font-size: 11px;
-      color: var(--text-1);
-      pointer-events: none;
-      display: none;
-      backdrop-filter: blur(8px);
-    }
-
-    /* ── Responsive ──────────────────────────────────── */
-    @media (max-width: 900px) {
-      #main { grid-template-columns: 1fr; grid-template-rows: auto 50vh auto; }
-      .sidebar { max-height: 250px; }
+    @media (max-width: 640px) {
+      #search { left: 8px; right: 8px; top: 8px; width: auto; max-height: 60vh; }
+      #drawer { width: 100%; }
     }
   </style>
 </head>
 <body>
+<div id="map"></div>
 
-<!-- Topbar -->
-<header id="topbar">
-  <a id="logo" href="#">
-    <div id="logo-icon">SF</div>
-    <div>
-      <div id="logo-text">IRL Route Intelligence</div>
-      <div id="logo-sub">San Francisco · MaxEnt IRL</div>
-    </div>
-  </a>
-
-  <div id="topbar-title">
-    Inverse Reinforcement Learning for Route Preference Learning
+<!-- Search / directions card -->
+<div id="search" class="panel">
+  <div class="brand">
+    <div class="logo">P</div>
+    <div><div class="t">Porto Routes</div><div class="s" id="sub">Routes learned from real taxi drivers</div></div>
+    <div class="grow"></div>
+    <button class="icon-btn" id="open-drawer" title="How the model decides" aria-label="Model details">&#9776;</button>
   </div>
 
-  <div id="status-indicator">
-    <div id="status-dot"></div>
-    <span id="status-text">Connecting …</span>
+  <div class="inputs">
+    <div class="rail"><div class="a"></div><div class="d"></div><div class="d"></div><div class="d"></div><div class="b"></div></div>
+    <div class="fields">
+      <div class="field" id="fA">Choose starting point on the map</div>
+      <div class="field" id="fB">Choose destination</div>
+    </div>
+    <button class="icon-btn swap" id="swap" title="Swap" aria-label="Swap">&#8645;</button>
   </div>
 
-  <button id="run-btn" onclick="runPipeline()">
-    <span>▶</span> Run Pipeline
-  </button>
-</header>
-
-<!-- Main -->
-<div id="main">
-
-  <!-- Left Sidebar -->
-  <div class="sidebar" id="left-sidebar" style="background: var(--bg-panel); border-right: 1px solid var(--border);">
-
-    <!-- Graph Stats -->
-    <div class="card">
-      <div class="card-title">Road Network</div>
-      <div class="stat-grid">
-        <div class="stat-pill">
-          <div class="stat-num" id="stat-nodes">—</div>
-          <div class="stat-label">INTERSECTIONS</div>
-        </div>
-        <div class="stat-pill">
-          <div class="stat-num" id="stat-edges">—</div>
-          <div class="stat-label">ROAD SEGMENTS</div>
-        </div>
-        <div class="stat-pill">
-          <div class="stat-num" id="stat-train">—</div>
-          <div class="stat-label">TRAIN TRAJS</div>
-        </div>
-        <div class="stat-pill">
-          <div class="stat-num" id="stat-test">—</div>
-          <div class="stat-label">TEST TRAJS</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Training Convergence -->
-    <div class="card">
-      <div class="card-title">Training Convergence</div>
-      <div class="chart-wrap">
-        <canvas id="convergenceChart"></canvas>
-      </div>
-    </div>
-
-    <!-- Learned Weights -->
-    <div class="card">
-      <div class="card-title">Learned Feature Weights</div>
-      <div id="weights-viz"></div>
-      <div class="legend-item" style="margin-top:8px;">
-        <div class="legend-line" style="background:var(--cyan)"></div>
-        <span>Learned (IRL)</span>
-        <div class="legend-line" style="background:var(--violet); margin-left:8px;"></div>
-        <span>Ground Truth</span>
-      </div>
-    </div>
-
-    <!-- Pipeline Log -->
-    <div class="card">
-      <div class="card-title">Pipeline Log</div>
-      <div id="log-box"><div class="log-line">Waiting for backend …</div></div>
-    </div>
-
+  <div class="actions">
+    <button class="chip" id="random">Random trip</button>
+    <button class="chip plain" id="clear">Clear</button>
   </div>
 
-  <!-- Map -->
-  <div id="map-container">
-    <div id="map"></div>
-
-    <!-- Map method controls -->
-    <div id="map-controls">
-      <button class="method-btn active" id="btn-irl"
-        style="border-color:rgba(0,212,255,0.5);"
-        onclick="selectMethod('irl', this)">
-        <span class="dot" style="background:var(--cyan); box-shadow:0 0 8px var(--cyan)"></span>
-        IRL (MaxEnt)
-      </button>
-      <button class="method-btn" id="btn-shortest"
-        style="border-color:rgba(245,197,66,0.4);"
-        onclick="selectMethod('shortest', this)">
-        <span class="dot" style="background:var(--amber);"></span>
-        Dijkstra Shortest
-      </button>
-      <button class="method-btn" id="btn-fastest"
-        style="border-color:rgba(255,77,109,0.4);"
-        onclick="selectMethod('fastest', this)">
-        <span class="dot" style="background:var(--red);"></span>
-        Dijkstra Fastest
-      </button>
-      <button class="method-btn" id="btn-myopic"
-        style="border-color:rgba(155,89,245,0.4);"
-        onclick="selectMethod('myopic', this)">
-        <span class="dot" style="background:var(--violet);"></span>
-        Myopic Classifier
-      </button>
-      <button class="method-btn" style="border-color:rgba(0,255,204,0.4);"
-        onclick="loadRandomRoute()">
-        <span style="font-size:14px">🔀</span> Random OD Pair
-      </button>
-    </div>
-
-    <!-- Route badges -->
-    <div id="route-info"></div>
-  </div>
-
-  <!-- Right Sidebar -->
-  <div class="sidebar" id="right-sidebar" style="background: var(--bg-panel); border-left: 1px solid var(--border);">
-
-    <!-- Evaluation Metrics -->
-    <div class="card">
-      <div class="card-title">Evaluation Metrics</div>
-      <div id="eval-table-wrap">
-        <div style="color:var(--text-3); font-size:11px; text-align:center; padding:20px 0;">
-          Run pipeline to see results
-        </div>
-      </div>
-    </div>
-
-    <!-- Expert Trajectories -->
-    <div class="card">
-      <div class="card-title">Expert Trajectories</div>
-      <div id="traj-list">
-        <div style="color:var(--text-3); font-size:11px;">Loading …</div>
-      </div>
-    </div>
-
-    <!-- Feature comparison chart -->
-    <div class="card">
-      <div class="card-title">Weight Radar</div>
-      <div class="chart-wrap">
-        <canvas id="radarChart"></canvas>
-      </div>
-    </div>
-
-    <!-- MDP Info -->
-    <div class="card">
-      <div class="card-title">MDP Formulation</div>
-      <div style="font-size:11px; color:var(--text-2); line-height:1.8;">
-        <div><span style="color:var(--cyan)">State</span> s = (node, incoming edge)</div>
-        <div><span style="color:var(--amber)">Action</span> a = outgoing road segment</div>
-        <div><span style="color:var(--teal)">Reward</span> R = w<sup>T</sup>φ(s,a)</div>
-        <div><span style="color:var(--violet)">Policy</span> π ∝ exp(Q<sub>soft</sub>)</div>
-        <div style="margin-top:8px;"><span style="color:var(--text-3)">Algorithm:</span> MaxEnt IRL</div>
-        <div><span style="color:var(--text-3)">Env:</span> San Francisco OSM</div>
-        <div><span style="color:var(--text-3)">Features:</span> 10 edge attributes</div>
-      </div>
-    </div>
-
+  <div class="scroll" id="scroll">
+    <div class="hint" id="hint">Click the map to set a start point, then a destination. You can drag the pins to change them.</div>
+    <div id="results"></div>
+    <div class="section-h" id="trips-h">REPLAY A REAL TAXI TRIP</div>
+    <div id="trips"></div>
   </div>
 </div>
 
-<!-- Tooltip -->
-<div id="tooltip"></div>
+<!-- Model drawer -->
+<div id="drawer" class="panel">
+  <header><h2>How the model decides</h2><button class="icon-btn" id="close-drawer" aria-label="Close">&#10005;</button></header>
+  <div class="body">
+    <h3>STATUS</h3>
+    <div class="status"><i id="dot"></i><span id="status-text">Connecting…</span></div>
+    <div style="margin-top:10px"><button class="btn" id="retrain">Retrain model</button></div>
+    <div class="note" id="data-note"></div>
+
+    <h3>LEARNED REWARD WEIGHTS</h3>
+    <div id="weights"></div>
+    <div class="note">Negative = drivers avoid it (e.g. sharp turns, slow roads). Weights multiply the road features at every junction; the route is the most likely path under that reward.</div>
+
+    <h3>TRAINING LOSS</h3>
+    <div class="chart-wrap"><canvas id="loss"></canvas></div>
+
+    <h3>HOW GOOD IS IT? (HELD-OUT REAL TRIPS)</h3>
+    <div id="eval"></div>
+    <div class="note">Highlighted = best per metric. Length ratio closer to 1 is better.</div>
+  </div>
+</div>
+
+<div id="offline"><div><b style="color:var(--text);font-size:16px">Can't reach the server</b><br>Start it in a terminal:<br><code>python run_api.py</code></div></div>
+<div id="toast"></div>
 
 <script>
-// ───────────────────────────────────────────────────────────
-// Config
-// ───────────────────────────────────────────────────────────
-const API = 'http://localhost:5000/api';
-const SF_CENTER = [37.768, -122.415];
+const API = location.protocol === 'file:' ? 'http://localhost:5000/api' : '/api';
 
-const COLORS = {
-  irl:      '#00d4ff',
-  shortest: '#f5c542',
-  fastest:  '#ff4d6d',
-  myopic:   '#9b59f5',
-  expert:   '#39ff7e',
+const NAMES = {
+  irl:      { n: 'Learned preference', c: '#1a73e8', d: 'Follows what real drivers tend to choose' },
+  shortest: { n: 'Shortest distance',  c: '#e37400', d: 'Minimises length only' },
+  fastest:  { n: 'Fastest (speed limits)', c: '#d93025', d: 'Minimises free-flow time' },
+  myopic:   { n: 'Junction-by-junction', c: '#7b1fa2', d: 'Local classifier, ignores destination' },
 };
 
-// ───────────────────────────────────────────────────────────
-// Map init
-// ───────────────────────────────────────────────────────────
-const map = L.map('map', {
-  center: SF_CENTER, zoom: 13,
-  zoomControl: true,
-  attributionControl: false,
-});
-
-// Dark tile layer
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+// ── Map ────────────────────────────────────────────────
+const map = L.map('map', { center: [41.1621, -8.6150], zoom: 14, zoomControl: false, preferCanvas: false });
+L.control.zoom({ position: 'bottomright' }).addTo(map);
+const tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19,
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
 }).addTo(map);
+tiles.on('load', () => { if (typeof state !== 'undefined' && state && !userMoved) { map.invalidateSize(); fit(); } });
+new ResizeObserver(() => map.invalidateSize()).observe(document.body);
 
-// Route polylines
-const routeLayers = {};
-const expertLayer = { layer: null };
+let A = null, B = null, mA = null, mB = null;
+let state = null;            // last /routes response
+let selected = 'irl';
+let layers = [];             // {key, casing, line, bubble}
+let driverLayer = null;
+let pickNext = 'A', userMoved = false;
+['mousedown', 'touchstart', 'wheel'].forEach(ev => document.getElementById('map').addEventListener(ev, () => { userMoved = true; }, { passive: true }));
 
-function clearRoute(method) {
-  if (routeLayers[method]) {
-    map.removeLayer(routeLayers[method]);
-    routeLayers[method] = null;
-  }
+const icon = (cls, size, anchor) => L.divIcon({ className: '', html: `<div class="${cls}"></div>`, iconSize: size, iconAnchor: anchor });
+const fmtTime = s => s < 3600 ? Math.max(1, Math.round(s / 60)) + ' min' : Math.floor(s / 3600) + ' h ' + Math.round((s % 3600) / 60) + ' min';
+const fmtDist = m => m < 1000 ? m + ' m' : (m / 1000).toFixed(1) + ' km';
+const ll = p => `${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}`;
+const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+
+function toast(msg) {
+  const t = document.getElementById('toast'); t.textContent = msg; t.style.display = 'block';
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.style.display = 'none', 3200);
 }
 
-function drawRoute(coords, method) {
-  clearRoute(method);
-  if (!coords || coords.length < 2) return;
-  const lls = coords.map(c => [c.lat, c.lon]);
-  routeLayers[method] = L.polyline(lls, {
-    color: COLORS[method],
-    weight: method === 'irl' ? 5 : 3,
-    opacity: method === 'irl' ? 0.95 : 0.7,
+// ── Pins ───────────────────────────────────────────────
+function setPin(which, p) {
+  const isA = which === 'A';
+  if (isA) { A = p; if (mA) map.removeLayer(mA); } else { B = p; if (mB) map.removeLayer(mB); }
+  const m = L.marker([p.lat, p.lon], {
+    draggable: true,
+    icon: isA ? icon('pin-a', [16, 16], [8, 8]) : icon('pin-b', [22, 22], [11, 22]),
   }).addTo(map);
-
-  if (method === 'irl') {
-    map.fitBounds(routeLayers[method].getBounds(), { padding: [40, 40] });
-  }
+  m.on('dragend', () => { const q = m.getLatLng(); setPin(which, { lat: q.lat, lon: q.lng }); if (A && B) fetchRoutes({ origin_ll: [A.lat, A.lon], dest_ll: [B.lat, B.lon] }); });
+  if (isA) mA = m; else mB = m;
+  refreshFields();
+}
+function refreshFields() {
+  const fa = document.getElementById('fA'), fb = document.getElementById('fB');
+  fa.textContent = A ? ll(A) : 'Choose starting point on the map';
+  fb.textContent = B ? ll(B) : 'Choose destination';
+  fa.classList.toggle('set', !!A); fb.classList.toggle('set', !!B);
+  fa.classList.toggle('active', pickNext === 'A'); fb.classList.toggle('active', pickNext === 'B');
 }
 
-function drawExpert(coords) {
-  if (expertLayer.layer) map.removeLayer(expertLayer.layer);
-  if (!coords || coords.length < 2) return;
-  const lls = coords.map(c => [c.lat, c.lon]);
-  expertLayer.layer = L.polyline(lls, {
-    color: COLORS.expert,
-    weight: 4,
-    opacity: 0.8,
-    dashArray: '8,8',
-  }).addTo(map);
-}
-
-// Markers
-let originMarker = null, destMarker = null;
-function setMarkers(orig, dest) {
-  if (originMarker) map.removeLayer(originMarker);
-  if (destMarker)   map.removeLayer(destMarker);
-  if (orig) {
-    originMarker = L.circleMarker([orig.lat, orig.lon], {
-      radius: 8, color: '#fff', fillColor: '#00d4ff',
-      fillOpacity: 1, weight: 2,
-    }).bindTooltip('Origin').addTo(map);
-  }
-  if (dest) {
-    destMarker = L.circleMarker([dest.lat, dest.lon], {
-      radius: 8, color: '#fff', fillColor: '#ff4d6d',
-      fillOpacity: 1, weight: 2,
-    }).bindTooltip('Destination').addTo(map);
-  }
-}
-
-// ───────────────────────────────────────────────────────────
-// Charts
-// ───────────────────────────────────────────────────────────
-let convergenceChart = null;
-let radarChart = null;
-
-function initConvergenceChart() {
-  const ctx = document.getElementById('convergenceChart').getContext('2d');
-  convergenceChart = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: [],
-      datasets: [{
-        label: 'Loss',
-        data: [],
-        borderColor: '#00d4ff',
-        backgroundColor: 'rgba(0,212,255,0.1)',
-        fill: true,
-        tension: 0.4,
-        pointRadius: 0,
-        borderWidth: 2,
-      }, {
-        label: 'Grad Norm',
-        data: [],
-        borderColor: '#9b59f5',
-        backgroundColor: 'transparent',
-        tension: 0.4,
-        pointRadius: 0,
-        borderWidth: 1.5,
-        borderDash: [4,4],
-      }]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: {
-        x: { display: false },
-        y: {
-          display: true,
-          ticks: { color: '#4a7090', font: { size: 9 } },
-          grid: { color: 'rgba(255,255,255,0.05)' },
-        }
-      },
-      animation: { duration: 600 },
-    }
-  });
-}
-
-function initRadarChart() {
-  const ctx = document.getElementById('radarChart').getContext('2d');
-  radarChart = new Chart(ctx, {
-    type: 'radar',
-    data: {
-      labels: [],
-      datasets: [{
-        label: 'Learned',
-        data: [],
-        borderColor: '#00d4ff',
-        backgroundColor: 'rgba(0,212,255,0.15)',
-        borderWidth: 2, pointRadius: 3,
-        pointBackgroundColor: '#00d4ff',
-      }, {
-        label: 'True',
-        data: [],
-        borderColor: '#9b59f5',
-        backgroundColor: 'rgba(155,89,245,0.1)',
-        borderWidth: 2, borderDash: [4,4], pointRadius: 3,
-        pointBackgroundColor: '#9b59f5',
-      }]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: {
-        r: {
-          ticks: { display: false },
-          grid: { color: 'rgba(255,255,255,0.06)' },
-          pointLabels: { color: '#4a7090', font: { size: 8 } },
-          angleLines: { color: 'rgba(255,255,255,0.05)' },
-        }
-      },
-      animation: { duration: 600 },
-    }
-  });
-}
-
-// ───────────────────────────────────────────────────────────
-// State
-// ───────────────────────────────────────────────────────────
-let currentMethod  = 'irl';
-let activeTrajectory = null;
-
-// ───────────────────────────────────────────────────────────
-// API helpers
-// ───────────────────────────────────────────────────────────
-async function apiFetch(path, opts = {}) {
-  try {
-    const res = await fetch(API + path, {
-      headers: { 'Content-Type': 'application/json' },
-      ...opts,
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
-  } catch (e) {
-    console.warn('[API]', path, e.message);
-    return null;
-  }
-}
-
-// ───────────────────────────────────────────────────────────
-// Status poll
-// ───────────────────────────────────────────────────────────
-let pollInterval = null;
-
-async function pollStatus() {
-  const data = await apiFetch('/status');
-  const dot  = document.getElementById('status-dot');
-  const txt  = document.getElementById('status-text');
-  const btn  = document.getElementById('run-btn');
-
-  if (!data) {
-    dot.className = 'error';
-    txt.textContent = 'Backend offline';
-    btn.disabled = false;
-    return;
-  }
-
-  if (data.training) {
-    dot.className = 'training';
-    txt.textContent = 'Training …';
-    btn.disabled = true;
-  } else if (data.irl_trained) {
-    dot.className = 'ready';
-    txt.textContent = 'Ready';
-    btn.disabled = false;
-    clearInterval(pollInterval);
-    pollInterval = null;
-    loadAll();
-  } else if (data.error) {
-    dot.className = 'error';
-    txt.textContent = 'Error';
-    btn.disabled = false;
+map.on('click', e => {
+  const p = { lat: e.latlng.lat, lon: e.latlng.lng };
+  if (pickNext === 'A') {
+    clearRoutes(false); if (mB) { map.removeLayer(mB); mB = null; B = null; }
+    setPin('A', p); pickNext = 'B'; refreshFields();
   } else {
-    dot.className = '';
-    txt.textContent = 'Not trained';
-    btn.disabled = false;
+    setPin('B', p); pickNext = 'A'; refreshFields();
+    fetchRoutes({ origin_ll: [A.lat, A.lon], dest_ll: [p.lat, p.lon] });
   }
-
-  // Update log
-  if (data.log && data.log.length) {
-    const box = document.getElementById('log-box');
-    box.innerHTML = data.log.map(l => {
-      const cls = l.includes('error') || l.includes('Error') ? 'err'
-                : l.includes('complete') || l.includes('complete') ? 'ok' : '';
-      return `<div class="log-line ${cls}">${escHtml(l)}</div>`;
-    }).join('');
-    box.scrollTop = box.scrollHeight;
-  }
-}
-
-function escHtml(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-
-// ───────────────────────────────────────────────────────────
-// Load all data
-// ───────────────────────────────────────────────────────────
-async function loadAll() {
-  await Promise.all([
-    loadGraphStats(),
-    loadWeights(),
-    loadHistory(),
-    loadEvaluation(),
-    loadTrajectories(),
-    loadRandomRoute(),
-  ]);
-}
-
-async function loadGraphStats() {
-  const d = await apiFetch('/graph/stats');
-  if (!d) return;
-  document.getElementById('stat-nodes').textContent = fmtNum(d.n_nodes);
-  document.getElementById('stat-edges').textContent = fmtNum(d.n_edges);
-}
-
-function fmtNum(n) {
-  if (n >= 1000) return (n/1000).toFixed(1) + 'k';
-  return String(n);
-}
-
-async function loadWeights() {
-  const d = await apiFetch('/weights');
-  if (!d) return;
-
-  // Weight bars
-  const viz   = document.getElementById('weights-viz');
-  const labels = d.features.map(f => f.replace('road_','').replace('turn_',''));
-  const lw    = d.learned;
-  const tw    = d.true;
-  const maxAbs = Math.max(...lw.map(Math.abs), ...tw.map(Math.abs), 0.01);
-
-  viz.innerHTML = labels.map((lbl, i) => {
-    const lv = lw[i] ?? 0;
-    const tv = tw[i] ?? 0;
-    const lPct = Math.abs(lv) / maxAbs * 100;
-    const tPct = Math.abs(tv) / maxAbs * 100;
-    const lColor = lv >= 0 ? 'var(--cyan)' : 'var(--red)';
-    const tColor = tv >= 0 ? 'var(--violet)' : '#f5c542';
-    return `
-      <div class="weight-row" title="${d.features[i]}">
-        <div class="weight-label">${lbl}</div>
-        <div style="flex:1; display:flex; flex-direction:column; gap:2px;">
-          <div class="weight-bar-wrap">
-            <div class="weight-bar" style="width:${lPct}%; background:${lColor};"></div>
-          </div>
-          <div class="weight-bar-wrap">
-            <div class="weight-bar" style="width:${tPct}%; background:${tColor}; opacity:0.6;"></div>
-          </div>
-        </div>
-        <div class="weight-val">${lv.toFixed(2)}</div>
-      </div>`;
-  }).join('');
-
-  // Radar chart
-  if (radarChart) {
-    radarChart.data.labels = labels;
-    radarChart.data.datasets[0].data = lw;
-    radarChart.data.datasets[1].data = tw;
-    radarChart.update();
-  }
-
-  // Update stat pills for trajectories (add train/test counts here)
-  const status = await apiFetch('/status');
-  // can't get train/test count from status, use trajectories endpoint
-}
-
-async function loadHistory() {
-  const d = await apiFetch('/history');
-  if (!d || !d.iterations) return;
-  if (convergenceChart) {
-    convergenceChart.data.labels   = d.iterations;
-    convergenceChart.data.datasets[0].data = d.loss;
-    convergenceChart.data.datasets[1].data = d.grad_norm;
-    convergenceChart.update();
-  }
-}
-
-async function loadEvaluation() {
-  const d = await apiFetch('/evaluation');
-  if (!d) return;
-
-  const metrics = ['Edge Jaccard','Edge F1','Path Length Ratio',
-                   'Top-1 Accuracy','Top-3 Accuracy'];
-  const methods = Object.keys(d);
-
-  // Find best per metric
-  const best = {};
-  metrics.forEach(m => {
-    let bv = -Infinity, bk = null;
-    methods.forEach(k => {
-      const v = d[k][m];
-      if (v !== undefined && v !== null) {
-        // For path-length ratio, closest to 1 is best
-        const score = m === 'Path Length Ratio' ? -Math.abs(v-1) : v;
-        if (score > bv) { bv = score; bk = k; }
-      }
-    });
-    best[m] = bk;
-  });
-
-  const wrap = document.getElementById('eval-table-wrap');
-  const shortNames = {
-    'IRL (MaxEnt)':      'IRL',
-    'Dijkstra-Shortest': 'D-Dist',
-    'Dijkstra-Fastest':  'D-Time',
-    'Myopic-Classifier': 'Myopic',
-  };
-
-  wrap.innerHTML = `
-    <table class="metrics-table">
-      <thead>
-        <tr>
-          <th>Metric</th>
-          ${methods.map(m => `<th>${shortNames[m]||m}</th>`).join('')}
-        </tr>
-      </thead>
-      <tbody>
-        ${metrics.map(metric => `
-          <tr>
-            <td>${metric.replace(' ','&nbsp;')}</td>
-            ${methods.map(method => {
-              const v = d[method][metric];
-              const isBest = best[metric] === method;
-              const txt = v !== undefined ? v.toFixed(3) : '—';
-              return `<td class="${isBest ? 'best' : ''}">${txt}</td>`;
-            }).join('')}
-          </tr>
-        `).join('')}
-      </tbody>
-    </table>`;
-}
-
-async function loadTrajectories() {
-  const d = await apiFetch('/trajectories');
-  if (!d || !d.trajectories) return;
-
-  const list = document.getElementById('traj-list');
-  list.innerHTML = d.trajectories.map((t, i) => `
-    <div class="traj-item" id="traj-${i}" onclick="showTrajectory(${i})">
-      <div style="font-size:11px; font-weight:600; color:var(--text-1);">
-        Trip #${i+1}
-        <span style="float:right; color:var(--teal);">${t.n_edges} edges</span>
-      </div>
-      <div class="traj-meta">
-        <span>O: ${t.origin}</span>
-        <span>D: ${t.destination}</span>
-      </div>
-    </div>`).join('');
-
-  // Store for later
-  window._trajectories = d.trajectories;
-
-  // Update stat pills
-  document.getElementById('stat-train').textContent = '—';
-  document.getElementById('stat-test').textContent  = '—';
-
-  // Load status to get counts
-  const st = await apiFetch('/status');
-}
-
-function showTrajectory(idx) {
-  const trajs = window._trajectories;
-  if (!trajs || !trajs[idx]) return;
-  const t = trajs[idx];
-
-  // Deactivate all
-  document.querySelectorAll('.traj-item').forEach(el => el.classList.remove('active'));
-  document.getElementById(`traj-${idx}`).classList.add('active');
-
-  drawExpert(t.coords);
-  const first = t.coords[0];
-  const last  = t.coords[t.coords.length-1];
-  setMarkers(first, last);
-
-  activeTrajectory = t;
-}
-
-// ───────────────────────────────────────────────────────────
-// Route generation
-// ───────────────────────────────────────────────────────────
-async function loadRoute(method, origin=null, dest=null) {
-  const body = { method };
-  if (origin !== null) body.origin = origin;
-  if (dest   !== null) body.destination = dest;
-
-  const d = await apiFetch('/route', {
-    method: 'POST',
-    body: JSON.stringify(body),
-  });
-  if (!d) return null;
-
-  drawRoute(d.route, method);
-  if (d.expert && d.expert.length > 1) drawExpert(d.expert);
-
-  const orig = d.route[0];
-  const dst  = d.route[d.route.length-1];
-  setMarkers(orig, dst);
-
-  updateRouteBadge(method, d.n_edges);
-  return d;
-}
-
-let _currentOD = null;
-
-async function loadRandomRoute() {
-  // Load IRL route with random OD
-  const d = await loadRoute('irl');
-  if (d) {
-    _currentOD = { origin: d.origin, destination: d.destination };
-    // Also load baselines for same OD
-    await Promise.all([
-      loadRoute('shortest', d.origin, d.destination),
-      loadRoute('fastest',  d.origin, d.destination),
-      loadRoute('myopic',   d.origin, d.destination),
-    ]);
-    highlightMethod(currentMethod);
-  }
-}
-
-function highlightMethod(method) {
-  // Bring selected layer to front, dim others
-  Object.entries(routeLayers).forEach(([m, layer]) => {
-    if (!layer) return;
-    layer.setStyle({
-      opacity: m === method ? 0.95 : 0.25,
-      weight:  m === method ? 5 : 2,
-    });
-    if (m === method) layer.bringToFront();
-  });
-}
-
-function selectMethod(method, btn) {
-  currentMethod = method;
-  document.querySelectorAll('.method-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  highlightMethod(method);
-}
-
-function updateRouteBadge(method, n) {
-  const info = document.getElementById('route-info');
-  const id   = `badge-${method}`;
-  let badge  = document.getElementById(id);
-  if (!badge) {
-    badge = document.createElement('div');
-    badge.id = id;
-    badge.className = 'route-badge';
-    info.appendChild(badge);
-  }
-  const color = COLORS[method];
-  badge.style.borderColor = color;
-  badge.style.color = color;
-  badge.innerHTML = `<span style="font-weight:700">${method.toUpperCase()}</span> · ${n} edges`;
-}
-
-// ───────────────────────────────────────────────────────────
-// Pipeline trigger
-// ───────────────────────────────────────────────────────────
-async function runPipeline() {
-  const btn = document.getElementById('run-btn');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Starting…';
-
-  const d = await apiFetch('/run_pipeline', {
-    method: 'POST', body: JSON.stringify({})
-  });
-
-  if (d && d.started) {
-    pollInterval = setInterval(pollStatus, 2000);
-  } else {
-    btn.disabled = false;
-    btn.innerHTML = '<span>▶</span> Run Pipeline';
-  }
-}
-
-// ───────────────────────────────────────────────────────────
-// Initialise
-// ───────────────────────────────────────────────────────────
-window.addEventListener('DOMContentLoaded', () => {
-  initConvergenceChart();
-  initRadarChart();
-
-  // Poll status on load
-  pollStatus();
-  // Start periodic status polling (every 3s to keep in sync)
-  setInterval(pollStatus, 3000);
-
-  // Load data if already trained
-  setTimeout(loadAll, 500);
 });
+document.getElementById('fA').onclick = () => { pickNext = 'A'; refreshFields(); };
+document.getElementById('fB').onclick = () => { pickNext = 'B'; refreshFields(); };
+document.getElementById('swap').onclick = () => {
+  if (!A || !B) return; const a = A, b = B; setPin('A', b); setPin('B', a);
+  fetchRoutes({ origin_ll: [A.lat, A.lon], dest_ll: [B.lat, B.lon] });
+};
+document.getElementById('clear').onclick = () => { clearRoutes(true); };
+document.getElementById('random').onclick = () => fetchRoutes({});
+
+function clearRoutes(full) {
+  layers.forEach(l => { map.removeLayer(l.casing); map.removeLayer(l.line); if (l.bubble) map.removeLayer(l.bubble); });
+  layers = []; if (driverLayer) { map.removeLayer(driverLayer); driverLayer = null; }
+  state = null;
+  document.getElementById('results').innerHTML = '';
+  document.getElementById('hint').style.display = 'block';
+  if (full) {
+    [mA, mB].forEach(m => m && map.removeLayer(m)); mA = mB = A = B = null; pickNext = 'A'; refreshFields();
+  }
+}
+
+// ── Routes ─────────────────────────────────────────────
+async function api(path, opts = {}) {
+  try {
+    const r = await fetch(API + path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+    const j = await r.json().catch(() => null);
+    if (!r.ok) return { _error: (j && j.error) || ('HTTP ' + r.status) };
+    return j;
+  } catch (e) { return null; }
+}
+
+async function fetchRoutes(body) {
+  document.getElementById('hint').textContent = 'Finding routes…';
+  document.getElementById('hint').style.display = 'block';
+  const d = await api('/routes', { method: 'POST', body: JSON.stringify(body) });
+  if (!d || d._error) { toast(d && d._error ? d._error : 'No route found'); document.getElementById('hint').textContent = 'Click the map to set a start point, then a destination.'; return; }
+  state = d;
+  clearRoutes(false);
+  state = d;
+  setPin('A', d.origin); setPin('B', d.destination); pickNext = 'A'; refreshFields();
+  selected = 'irl' in d.routes ? 'irl' : Object.keys(d.routes)[0];
+  draw();
+  fit();
+  // the pane may still be laying out: re-fit a few times unless the user starts moving the map
+  userMoved = false;
+  [300, 1200, 3000].forEach(ms => setTimeout(() => { if (state && !userMoved) { map.invalidateSize(); fit(); } }, ms));
+}
+
+function draw() {
+  layers.forEach(l => { map.removeLayer(l.casing); map.removeLayer(l.line); if (l.bubble) map.removeLayer(l.bubble); });
+  layers = [];
+  if (driverLayer) { map.removeLayer(driverLayer); driverLayer = null; }
+  if (!state) return;
+  const seen = new Map();
+  // draw non-selected first so the selected route sits on top
+  const keys = Object.keys(state.routes).sort((a, b) => (a === selected) - (b === selected));
+  keys.forEach(k => {
+    const r = state.routes[k], sel = k === selected;
+    const pts = r.coords;
+    const casing = L.polyline(pts, { color: '#fff', weight: sel ? 11 : 9, opacity: 1, lineJoin: 'round', interactive: false }).addTo(map);
+    const line = L.polyline(pts, { color: sel ? '#1a73e8' : '#9aa0a6', weight: sel ? 7 : 5, opacity: 1, lineJoin: 'round' }).addTo(map);
+    line.on('click', () => { selected = k; draw(); renderCards(); });
+    let bubble = null;
+    if (!seen.has(r.sig)) {
+      seen.set(r.sig, k);
+      const mid = pts[Math.floor(pts.length / 2)];
+      bubble = L.marker(mid, { interactive: true, icon: L.divIcon({ className: '', html: `<div class="bubble ${sel ? 'sel' : ''}">${fmtTime(r.time_s)}</div>`, iconSize: [60, 24], iconAnchor: [30, 12] }) }).addTo(map);
+      bubble.on('click', () => { selected = k; draw(); renderCards(); });
+    }
+    layers.push({ key: k, casing, line, bubble });
+  });
+  if (state.driver) {
+    const dc = L.polyline(state.driver.coords, { color: '#fff', weight: 9, opacity: .9, interactive: false });
+    const dl = L.polyline(state.driver.coords, { color: '#188038', weight: 5, opacity: 1, dashArray: '9,7', interactive: false });
+    driverLayer = L.featureGroup([dc, dl]).addTo(map);
+    driverLayer.bringToFront();
+  }
+  if (mA) mA.setZIndexOffset(1000); if (mB) mB.setZIndexOffset(1000);
+  renderCards();
+}
+
+function fit() {
+  const all = layers.map(l => l.line);
+  if (driverLayer) all.push(driverLayer);
+  if (!all.length) return;
+  const w = window.innerWidth > 640 ? 440 : 20;
+  map.fitBounds(L.featureGroup(all).getBounds(), { paddingTopLeft: [w, 40], paddingBottomRight: [40, 40], maxZoom: 17, animate: false });
+}
+
+function renderCards() {
+  const box = document.getElementById('results');
+  document.getElementById('hint').style.display = 'none';
+  if (!state) { box.innerHTML = ''; return; }
+  const order = ['irl', 'shortest', 'fastest', 'myopic'].filter(k => state.routes[k]);
+  const sigs = {};
+  let html = `<div class="section-h">${order.length} ROUTE OPTIONS</div>`;
+  order.forEach(k => {
+    const r = state.routes[k], m = NAMES[k];
+    const same = sigs[r.sig]; sigs[r.sig] = sigs[r.sig] || NAMES[k].n;
+    html += `<button class="route ${k === selected ? 'sel' : ''}" data-k="${k}">
+      <div class="top"><span class="time">${fmtTime(r.time_s)}</span><span class="dist">${fmtDist(r.distance_m)}</span>
+        <span class="name"><span class="dot" style="background:${m.c}"></span>${m.n}</span></div>
+      <div class="meta">${r.turns} turns${r.sharp_turns ? ` (${r.sharp_turns} sharp)` : ''} · ${r.pct_residential}% residential streets</div>
+      ${same ? `<span class="badge same">Same path as “${same}”</span>` : ''}
+      ${r.overlap_pct != null ? `<span class="badge">${r.overlap_pct}% overlap with the actual driver</span>` : ''}
+    </button>`;
+  });
+  if (state.driver) {
+    const r = state.driver;
+    html += `<div class="route" style="cursor:default"><div class="top"><span class="time" style="color:var(--green)">${fmtTime(r.time_s)}</span><span class="dist">${fmtDist(r.distance_m)}</span>
+      <span class="name"><span class="dot" style="background:#188038"></span>Actual taxi driver</span></div>
+      <div class="meta">${r.turns} turns · ${r.pct_residential}% residential · dashed green line</div></div>`;
+  }
+  html += `<div class="note" style="padding:8px 16px">Times are free-flow estimates from speed limits, not live traffic.</div>`;
+  box.innerHTML = html;
+  box.querySelectorAll('.route[data-k]').forEach(b => {
+    b.onclick = () => { selected = b.dataset.k; draw(); };
+    b.onmouseenter = () => { const l = layers.find(x => x.key === b.dataset.k); if (l && b.dataset.k !== selected) l.line.setStyle({ color: NAMES[b.dataset.k].c }); };
+    b.onmouseleave = () => { const l = layers.find(x => x.key === b.dataset.k); if (l && b.dataset.k !== selected) l.line.setStyle({ color: '#9aa0a6' }); };
+  });
+}
+
+// ── Real trips list ────────────────────────────────────
+async function loadTrips() {
+  const d = await api('/trips'); if (!d || !d.trips) return;
+  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  document.getElementById('trips').innerHTML = d.trips.map(t => {
+    const when = t.hour != null ? `${days[t.weekday]} ${String(t.hour).padStart(2, '0')}:00` : '';
+    return `<button class="trip" data-i="${t.index}"><div class="ic">&#9679;</div>
+      <div><div class="a">${fmtDist(t.distance_m)} trip</div><div class="b">${when}${when ? ' · ' : ''}real taxi, held-out</div></div></button>`;
+  }).join('');
+  document.querySelectorAll('.trip').forEach(b => b.onclick = () => fetchRoutes({ trip_index: +b.dataset.i }));
+}
+
+// ── Drawer / model ─────────────────────────────────────
+const drawer = document.getElementById('drawer');
+document.getElementById('open-drawer').onclick = () => drawer.classList.toggle('open');
+document.getElementById('close-drawer').onclick = () => drawer.classList.remove('open');
+
+let lossChart = null;
+function initChart() {
+  lossChart = new Chart(document.getElementById('loss'), {
+    type: 'line',
+    data: { labels: [], datasets: [{ data: [], borderColor: '#1a73e8', backgroundColor: 'rgba(26,115,232,.08)', fill: true, tension: .3, pointRadius: 0, borderWidth: 2 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+      scales: { x: { display: false }, y: { ticks: { color: '#80868b', font: { size: 10 }, maxTicksLimit: 4 }, grid: { color: '#f1f3f4' }, border: { display: false } } },
+      animation: { duration: 300 } },
+  });
+}
+async function loadModel() {
+  const [w, h, e, s] = await Promise.all([api('/weights'), api('/history'), api('/evaluation'), api('/status')]);
+  if (w && w.features) {
+    const names = w.features.map(f => f.replace('road_', '').replace('turn_', 'turn ').replace('_', ' '));
+    const max = Math.max(...w.learned.map(Math.abs), .01) * 1.05;
+    document.getElementById('weights').innerHTML = names.map((n, i) => {
+      const v = w.learned[i], wd = Math.abs(v) / max * 50, left = v < 0 ? 50 - wd : 50;
+      return `<div class="w-row"><div class="w-name">${esc(n)}</div><div class="w-track"><div class="w-bar ${v < 0 ? 'neg' : ''}" style="left:${left}%;width:${wd}%"></div></div><div class="w-val">${v.toFixed(2)}</div></div>`;
+    }).join('');
+  }
+  if (h && h.iterations) { lossChart.data.labels = h.iterations; lossChart.data.datasets[0].data = h.loss; lossChart.update(); }
+  if (e && !e.error) {
+    const metrics = ['Edge Jaccard', 'Edge F1', 'Path Length Ratio', 'Top-1 Accuracy', 'Top-3 Accuracy', 'Log-Likelihood'];
+    const nm = { 'Edge Jaccard': 'Jaccard', 'Edge F1': 'F1', 'Path Length Ratio': 'Length ratio', 'Top-1 Accuracy': 'Top-1', 'Top-3 Accuracy': 'Top-3', 'Log-Likelihood': 'Log-lik.' };
+    const sh = { 'IRL (MaxEnt)': 'IRL', 'Dijkstra-Shortest': 'Short', 'Dijkstra-Fastest': 'Fast', 'Myopic-Classifier': 'Myopic', 'Oracle (true reward)': 'Oracle*' };
+    const ms = Object.keys(e), cont = ms.filter(m => !/oracle/i.test(m)), best = {};
+    metrics.forEach(m => { let bv = -Infinity, bk = null; cont.forEach(k => { const v = e[k][m]; if (v == null) return; const sc = m === 'Path Length Ratio' ? -Math.abs(v - 1) : v; if (sc > bv) { bv = sc; bk = k; } }); best[m] = bk; });
+    document.getElementById('eval').innerHTML = `<table><thead><tr><th></th>${ms.map(m => `<th>${sh[m] || m}</th>`).join('')}</tr></thead><tbody>` +
+      metrics.map(m => `<tr><td>${nm[m]}</td>${ms.map(k => { const v = e[k][m]; return `<td class="${best[m] === k ? 'best' : ''}">${v == null ? '–' : v.toFixed(m === 'Log-Likelihood' ? 2 : 3)}</td>`; }).join('')}</tr>`).join('') + '</tbody></table>';
+  }
+  if (s) {
+    document.getElementById('data-note').textContent = `${s.region || ''} road network · ${s.n_train ?? '–'} training and ${s.n_test ?? '–'} test trips (${s.synthetic ? 'simulated drivers' : 'real taxi GPS'}).`;
+    document.getElementById('sub').textContent = s.synthetic ? 'Routes learned from simulated drivers' : 'Routes learned from real taxi drivers';
+  }
+}
+
+document.getElementById('retrain').onclick = async () => {
+  if (!confirm('Retrain the model from scratch?\n\nThis overwrites the saved weights and takes about 20 minutes.')) return;
+  document.getElementById('retrain').disabled = true; loaded = false;
+  await api('/run_pipeline', { method: 'POST', body: '{}' });
+};
+
+// ── Status polling ─────────────────────────────────────
+let loaded = false;
+async function poll() {
+  const d = await api('/status');
+  const dot = document.getElementById('dot'), tx = document.getElementById('status-text');
+  document.getElementById('offline').style.display = d ? 'none' : 'grid';
+  if (!d) { dot.className = 'error'; tx.textContent = 'Server offline'; return; }
+  if (d.training) { dot.className = 'training'; tx.textContent = 'Training…'; document.getElementById('retrain').disabled = true; }
+  else if (d.error) { dot.className = 'error'; tx.textContent = 'Error: ' + d.error; document.getElementById('retrain').disabled = false; }
+  else if (d.irl_trained) {
+    dot.className = 'ready'; tx.textContent = 'Model ready'; document.getElementById('retrain').disabled = false;
+    if (!loaded) { loaded = true; loadModel(); loadTrips(); if (!state) fetchRoutes({}); }
+  } else { dot.className = ''; tx.textContent = 'Not trained yet'; document.getElementById('retrain').disabled = false; }
+}
+
+window.addEventListener('DOMContentLoaded', () => { initChart(); refreshFields(); poll(); setInterval(poll, 4000); });
 </script>
 </body>
 </html>
