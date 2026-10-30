@@ -28,7 +28,7 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 
 from config import (
-    WEIGHTS_SAVE_PATH, RESULTS_DIR, TRAJ_SAVE_PATH,
+    BASE_DIR, WEIGHTS_SAVE_PATH, RESULTS_DIR, TRAJ_SAVE_PATH,
     FEATURES, TRUE_WEIGHTS, REGION_BBOX, REGION_NAME, SYNTHETIC, FEATURE_SET
 )
 import region
@@ -461,6 +461,19 @@ def place_at():
         label = names[0]
     else:
         label = None
+        # unnamed junction: use the closest named one within ~250 m
+        if _state.get("named_xy") is None:
+            ids = list(by_node)
+            _state["named_xy"] = (ids, np.array([[G.nodes[n]["y"], G.nodes[n]["x"]] for n in ids]))
+        ids, xy = _state["named_xy"]
+        if len(ids):
+            dlat = (xy[:, 0] - lat) * 111320.0
+            dlon = (xy[:, 1] - lon) * 111320.0 * np.cos(np.radians(lat))
+            d2 = dlat * dlat + dlon * dlon
+            j = int(np.argmin(d2))
+            if d2[j] <= 250.0 ** 2:
+                near = sorted(by_node[ids[j]])
+                label = "Near " + " & ".join(near[:2])
     return jsonify({"name": label})
 
 
@@ -626,6 +639,137 @@ def routes():
             pass
         resp["driver"] = st
     return jsonify(resp)
+
+
+# ──────────────────────────────────────────────────────────────
+# Live weather along a route (Open-Meteo forecast API, no key needed)
+# ──────────────────────────────────────────────────────────────
+import time as _time
+
+_WX_CACHE = {}          # key -> (fetched_at, payload)
+_WX_TTL = 300           # seconds
+_WX_CODES = {
+    0: ("Clear", "☀️"), 1: ("Mostly clear", "🌤️"), 2: ("Partly cloudy", "⛅"),
+    3: ("Overcast", "☁️"), 45: ("Fog", "🌫️"), 48: ("Freezing fog", "🌫️"),
+    51: ("Light drizzle", "🌦️"), 53: ("Drizzle", "🌦️"), 55: ("Heavy drizzle", "🌧️"),
+    61: ("Light rain", "🌧️"), 63: ("Rain", "🌧️"), 65: ("Heavy rain", "🌧️"),
+    66: ("Freezing rain", "🌧️"), 67: ("Freezing rain", "🌧️"),
+    71: ("Light snow", "🌨️"), 73: ("Snow", "🌨️"), 75: ("Heavy snow", "🌨️"),
+    77: ("Snow grains", "🌨️"), 80: ("Light showers", "🌦️"), 81: ("Showers", "🌧️"),
+    82: ("Heavy showers", "⛈️"), 85: ("Snow showers", "🌨️"), 86: ("Snow showers", "🌨️"),
+    95: ("Thunderstorm", "⛈️"), 96: ("Thunderstorm, hail", "⛈️"), 99: ("Thunderstorm, hail", "⛈️"),
+}
+
+
+def _wx_desc(code):
+    return _WX_CODES.get(int(code), ("Unknown", "❓"))
+
+
+def _sample_points(coords, n=4):
+    """n points spread evenly by index along the route (start and end included)."""
+    if len(coords) <= n:
+        return [list(c) for c in coords]
+    idx = [round(i * (len(coords) - 1) / (n - 1)) for i in range(n)]
+    return [list(coords[i]) for i in idx]
+
+
+def _fetch_weather(points):
+    import requests
+    key = tuple((round(a, 2), round(b, 2)) for a, b in points)
+    hit = _WX_CACHE.get(key)
+    if hit and _time.time() - hit[0] < _WX_TTL:
+        return hit[1]
+    r = requests.get("https://api.open-meteo.com/v1/forecast", timeout=8, params={
+        "latitude": ",".join(f"{p[0]:.4f}" for p in points),
+        "longitude": ",".join(f"{p[1]:.4f}" for p in points),
+        "current": "temperature_2m,precipitation,weather_code,wind_speed_10m,is_day",
+        "hourly": "temperature_2m,precipitation,precipitation_probability,weather_code,wind_speed_10m",
+        "forecast_days": 2, "timezone": "GMT", "timeformat": "unixtime", "wind_speed_unit": "kmh",
+    })
+    r.raise_for_status()
+    data = r.json()
+    data = data if isinstance(data, list) else [data]
+    _WX_CACHE[key] = (_time.time(), data)
+    return data
+
+
+@app.route("/api/route_weather", methods=["POST"])
+def route_weather():
+    """Live weather at points along a route. Body: {coords:[[lat,lon],...], time_s: ETA seconds}.
+
+    For each sample point: conditions now, and the hourly forecast at the moment the
+    traveller is expected to be there (departure now + share of the trip time).
+    """
+    body = request.get_json(silent=True) or {}
+    coords = body.get("coords") or []
+    if len(coords) < 2:
+        return jsonify({"error": "coords required"}), 400
+    total = float(body.get("time_s") or 0)
+    pts = _sample_points(coords)
+    try:
+        data = _fetch_weather(pts)
+    except Exception as e:
+        return jsonify({"error": f"Weather service unavailable: {e}"}), 502
+    now = _time.time()
+    out = []
+    for i, (pt, d) in enumerate(zip(pts, data)):
+        frac = i / max(1, len(pts) - 1)
+        eta = now + frac * total
+        cur = d.get("current", {})
+        h = d.get("hourly", {})
+        times = h.get("time", [])
+        j = min(range(len(times)), key=lambda k: abs(times[k] - eta)) if times else None
+        at = None
+        if j is not None:
+            at = {k: h[k][j] for k in ("temperature_2m", "precipitation", "precipitation_probability",
+                                       "weather_code", "wind_speed_10m")}
+            at["label"], at["icon"] = _wx_desc(at["weather_code"])
+        c = {"temp_c": cur.get("temperature_2m"), "precip_mm": cur.get("precipitation"),
+             "wind_kmh": cur.get("wind_speed_10m"), "is_day": cur.get("is_day"),
+             "code": cur.get("weather_code", 0)}
+        c["label"], c["icon"] = _wx_desc(c["code"])
+        out.append({"lat": pt[0], "lon": pt[1], "frac": round(frac, 2), "now": c, "at_arrival": at})
+    # worst conditions expected along the way
+    def sev(p):
+        a = p["at_arrival"] or {}
+        return (a.get("precipitation") or 0, a.get("weather_code") or 0)
+    worst = max(out, key=sev)
+    wet = (sev(worst)[0] >= 0.2) or (sev(worst)[1] >= 51)
+    return jsonify({
+        "points": out,
+        "alert": (f"{(worst['at_arrival'] or {}).get('label', 'Rain')} expected near "
+                  f"{int(worst['frac'] * 100)}% of the way: roads may be wet") if wet else None,
+        "updated": int(now),
+        "source": "Open-Meteo",
+    })
+
+
+# ── Map tiles: proxied + cached so OSM sees an identified app (tile usage policy) ──
+_TILE_DIR = os.path.join(BASE_DIR, "cache", "tiles")
+
+
+@app.route("/tiles/<int:z>/<int:x>/<int:y>.png")
+def tile(z, x, y):
+    from flask import send_file, Response
+    import requests
+    if not (0 <= z <= 19):
+        return Response(status=404)
+    path = os.path.join(_TILE_DIR, str(z), str(x), f"{y}.png")
+    if not os.path.exists(path):
+        try:
+            r = requests.get(f"https://tile.openstreetmap.org/{z}/{x}/{y}.png", timeout=8, headers={
+                "User-Agent": "PortoRoutesIRL/1.0 (academic route-preference research; local dashboard)",
+                "Referer": "http://localhost:5000/"})
+        except Exception:
+            return Response(status=502)
+        if r.status_code != 200:
+            return Response(status=r.status_code)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "wb") as f:
+            f.write(r.content)
+    resp = send_file(path, mimetype="image/png")
+    resp.headers["Cache-Control"] = "public, max-age=86400"
+    return resp
 
 
 @app.route("/api/run_pipeline", methods=["POST"])
