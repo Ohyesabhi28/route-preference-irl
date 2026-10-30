@@ -128,15 +128,56 @@
     .btn { font: inherit; cursor: pointer; padding: 8px 16px; border-radius: 18px; border: 1px solid var(--line); background: #fff; color: var(--blue); }
     .btn:hover { background: var(--blue-bg); } .btn:disabled { opacity: .5; cursor: not-allowed; }
 
-    .wx { margin: 0 16px 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: #f3f8ff; font-size: 12.5px; }
-    .wx h4 { margin: 0 0 6px; font-size: 13px; font-weight: 600; display: flex; justify-content: space-between; }
-    .wx h4 span { font-weight: 400; color: var(--muted); font-size: 11.5px; }
-    .wx .alert { background: #fef7e0; border: 1px solid #f9d77e; color: #7a4f00; border-radius: 6px; padding: 6px 8px; margin-bottom: 6px; line-height: 1.4; }
-    .wx .pt { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-top: 1px solid #e3ecf8; }
-    .wx .pt .ic { font-size: 20px; width: 26px; text-align: center; }
-    .wx .pt .lab { flex: 1; line-height: 1.3; } .wx .pt .lab small { color: var(--muted); display: block; }
-    .wx .pt .tp { font-variant-numeric: tabular-nums; font-weight: 500; }
-    .wxpin { background: #fff; border: 1px solid #c6d4e8; border-radius: 14px; padding: 1px 7px; font-size: 12px; white-space: nowrap; box-shadow: 0 1px 4px rgba(0,0,0,.25); }
+    /* ── Weather card ─────────────── */
+    .wx { --wx-a: #e8f0fe; --wx-b: #f6f9ff; --wx-ink: #174ea6; margin: 0 16px 14px; border-radius: 14px; overflow: hidden; border: 1px solid rgba(0,0,0,.07);
+          background: linear-gradient(160deg, var(--wx-a), var(--wx-b)); box-shadow: 0 1px 3px rgba(60,64,67,.12); }
+    .wx.t-clear  { --wx-a: #dbeafe; --wx-b: #fff7e0; --wx-ink: #174ea6; }
+    .wx.t-cloud  { --wx-a: #e6e9ee; --wx-b: #f5f6f8; --wx-ink: #3c4350; }
+    .wx.t-fog    { --wx-a: #e7e9ec; --wx-b: #f7f7f7; --wx-ink: #4a4f57; }
+    .wx.t-rain   { --wx-a: #cfdcf0; --wx-b: #eaf0f9; --wx-ink: #1d3f72; }
+    .wx.t-snow   { --wx-a: #e0eaf6; --wx-b: #f7fafe; --wx-ink: #2c4a6e; }
+    .wx.t-storm  { --wx-a: #d3cfe6; --wx-b: #ebe9f4; --wx-ink: #3a2f6b; }
+    .wx-top { display: flex; align-items: center; gap: 12px; padding: 12px 14px 8px; }
+    .wx-big { font-size: 40px; line-height: 1; filter: drop-shadow(0 1px 2px rgba(0,0,0,.15)); }
+    .wx-main { flex: 1; min-width: 0; }
+    .wx-temp { font-size: 26px; font-weight: 500; color: var(--wx-ink); line-height: 1.05; font-variant-numeric: tabular-nums; }
+    .wx-cond { font-size: 13px; color: var(--text); margin-top: 2px; }
+    .wx-sub { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+    .wx-meta { text-align: right; font-size: 11px; color: var(--muted); display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+    .wx-live { display: inline-flex; align-items: center; gap: 5px; font-weight: 500; color: var(--green); }
+    .wx-live i { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 0 rgba(24,128,56,.5); animation: wxpulse 2s infinite; }
+    @keyframes wxpulse { 70% { box-shadow: 0 0 0 6px rgba(24,128,56,0); } 100% { box-shadow: 0 0 0 0 rgba(24,128,56,0); } }
+    .wx-refresh { border: 0; background: rgba(255,255,255,.7); border-radius: 12px; padding: 2px 9px; font: inherit; font-size: 11px; color: var(--blue); cursor: pointer; }
+    .wx-refresh:hover { background: #fff; } .wx.busy .wx-refresh { opacity: .5; pointer-events: none; }
+    .wx-alert { margin: 0 12px 8px; padding: 8px 10px; border-radius: 8px; font-size: 12.5px; line-height: 1.4; display: flex; gap: 8px; align-items: flex-start;
+                background: #fef3c7; border: 1px solid #f6d365; color: #6b4500; }
+    .wx-alert.storm { background: #fde2e1; border-color: #f2a6a2; color: #8a1c14; }
+    .wx-ok { margin: 0 12px 8px; font-size: 12px; color: var(--green); display: flex; gap: 6px; align-items: center; }
+    .wx-line { position: relative; display: grid; grid-template-columns: repeat(4, 1fr); padding: 6px 6px 10px; background: rgba(255,255,255,.55); }
+    .wx-line::before { content: ''; position: absolute; left: 12.5%; right: 12.5%; top: 29px; height: 2px; background: #b9c6dc; }
+    .wx-stop { position: relative; text-align: center; padding: 0 2px; }
+    .wx-stop .pip { width: 9px; height: 9px; border-radius: 50%; background: #fff; border: 2px solid var(--wx-ink); margin: 0 auto 4px; position: relative; top: 15px; }
+    .wx-stop .lbl { font-size: 10.5px; color: var(--muted); letter-spacing: .02em; text-transform: uppercase; height: 14px; }
+    .wx-stop .ic { font-size: 22px; margin-top: 12px; }
+    .wx-stop .tp { font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; }
+    .wx-stop .rain { height: 4px; border-radius: 2px; background: #dfe6f1; margin: 5px 6px 2px; overflow: hidden; }
+    .wx-stop .rain i { display: block; height: 100%; background: #4285f4; border-radius: 2px; }
+    .wx-stop .pc { font-size: 10.5px; color: var(--muted); }
+    .wx details { background: rgba(255,255,255,.55); border-top: 1px solid rgba(0,0,0,.06); }
+    .wx summary { cursor: pointer; padding: 7px 14px; font-size: 12px; color: var(--blue); list-style: none; }
+    .wx summary::-webkit-details-marker { display: none; }
+    .wx summary::after { content: ' \25BE'; }
+    .wx details[open] summary::after { content: ' \25B4'; }
+    .wx .pt { display: flex; align-items: center; gap: 8px; padding: 5px 14px; border-top: 1px solid rgba(0,0,0,.05); font-size: 12px; }
+    .wx .pt .lab { flex: 1; line-height: 1.3; } .wx .pt .lab small { color: var(--muted); display: block; font-size: 11px; }
+    .wx-fine { padding: 6px 14px 9px; font-size: 10.5px; color: var(--muted); }
+    .wx-skel { padding: 14px; } .wx-skel div { height: 14px; border-radius: 7px; margin-bottom: 8px; background: linear-gradient(90deg, #e4e8ef 25%, #f2f4f8 50%, #e4e8ef 75%); background-size: 200% 100%; animation: wxsh 1.2s infinite; }
+    @keyframes wxsh { to { background-position: -200% 0; } }
+    .wxpin { display: flex; align-items: center; gap: 4px; background: #fff; border: 2px solid var(--pin, #4285f4); border-radius: 16px; padding: 1px 8px 1px 5px; font-size: 12px; font-weight: 500; white-space: nowrap;
+             box-shadow: 0 2px 6px rgba(0,0,0,.3); position: relative; }
+    .wxpin::after { content: ''; position: absolute; left: 50%; bottom: -7px; margin-left: -5px; border: 5px solid transparent; border-top-color: var(--pin, #4285f4); border-bottom: 0; }
+    .wxpin b { font-size: 15px; font-weight: 400; }
+    .wxpin.p-rain { --pin: #1a56b0; } .wxpin.p-storm { --pin: #7b1fa2; } .wxpin.p-snow { --pin: #5b8bbd; } .wxpin.p-cloud, .wxpin.p-fog { --pin: #80868b; } .wxpin.p-clear { --pin: #f9ab00; }
     #offline { position: fixed; z-index: 2000; inset: 0; display: none; place-items: center; background: rgba(255,255,255,.9); text-align: center; color: var(--muted); line-height: 1.8; }
     #offline code { background: #f1f3f4; padding: 2px 8px; border-radius: 4px; color: var(--text); }
     #toast { position: fixed; z-index: 1500; left: 50%; bottom: 28px; transform: translateX(-50%); background: #323232; color: #fff; padding: 10px 16px; border-radius: 6px; font-size: 13px; display: none; }
@@ -408,13 +449,14 @@ function clearWeather() {
   if (wxLayer) { map.removeLayer(wxLayer); wxLayer = null; }
   wxData = null;
 }
-async function loadWeather() {
+async function loadWeather(manual) {
   clearTimeout(wxTimer);
   if (!state || !state.routes[selected]) return;
+  if (manual) { const c = document.getElementById('wxcard'); if (c) c.classList.add('busy'); }
   const key = selected, r = state.routes[key];
   try {
     const res = await fetch(API + '/route_weather', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ coords: r.coords, time_s: r.time_s }) });
+      body: JSON.stringify({ coords: r.coords, time_s: r.time_s, force: !!manual }) });
     const d = await res.json();
     if (key !== selected) return;                    // user switched route meanwhile
     wxData = d.error ? { error: d.error } : d;
@@ -422,29 +464,55 @@ async function loadWeather() {
   drawWeather(); renderWeatherPanel();
   wxTimer = setTimeout(loadWeather, 300000);         // refresh every 5 min
 }
+function wxKind(code) {
+  code = +code;
+  if (code >= 95) return 'storm';
+  if ((code >= 71 && code <= 77) || code === 85 || code === 86) return 'snow';
+  if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) return 'rain';
+  if (code === 45 || code === 48) return 'fog';
+  if (code >= 2) return 'cloud';
+  return 'clear';
+}
 function drawWeather() {
   if (wxLayer) { map.removeLayer(wxLayer); wxLayer = null; }
   if (!wxData || !wxData.points) return;
   wxLayer = L.layerGroup(wxData.points.map(p => {
     const a = p.at_arrival || p.now;
+    const t = Math.round(a.temperature_2m ?? p.now.temp_c);
     return L.marker([p.lat, p.lon], { interactive: false, zIndexOffset: 500, icon: L.divIcon({ className: '',
-      html: `<div class="wxpin">${a.icon} ${Math.round(a.temperature_2m ?? a.temp_c)}&deg;</div>`, iconSize: [56, 24], iconAnchor: [28, 38] }) });
+      html: `<div class="wxpin p-${wxKind(a.weather_code ?? p.now.code)}"><b>${a.icon}</b>${t}&deg;</div>`, iconSize: [64, 26], iconAnchor: [32, 33] }) });
   })).addTo(map);
 }
 function wxPanel() {
-  if (!wxData) return `<div class="wx"><h4>Weather on route</h4>Loading live weather…</div>`;
-  if (wxData.error) return `<div class="wx"><h4>Weather on route</h4>${esc(wxData.error)}</div>`;
-  const names = ['Start', 'Along the way', 'Along the way', 'Destination'];
-  const n = wxData.points.length;
-  let html = `<div class="wx"><h4>Weather on route<span>live · ${new Date(wxData.updated * 1000).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}</span></h4>`;
-  if (wxData.alert) html += `<div class="alert">&#9888; ${esc(wxData.alert)}</div>`;
-  wxData.points.forEach((p, i) => {
-    const c = p.now, a = p.at_arrival || {};
+  if (!wxData) return `<div class="wx"><div class="wx-skel"><div style="width:55%"></div><div style="width:80%"></div><div style="width:65%"></div></div></div>`;
+  if (wxData.error) return `<div class="wx"><div class="wx-top"><span class="wx-big">&#9729;&#65039;</span><div class="wx-main"><div class="wx-cond">Weather unavailable</div><div class="wx-sub">${esc(wxData.error)}</div></div><div class="wx-meta"><button class="wx-refresh" onclick="loadWeather(true)">Retry</button></div></div></div>`;
+  const P = wxData.points, n = P.length, c0 = P[0].now;
+  const kind = wxKind(c0.code);
+  const hm = new Date(wxData.updated * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const worstKind = P.some(p => p.at_arrival && wxKind(p.at_arrival.weather_code) === 'storm') ? 'storm' : 'rain';
+  const maxPop = Math.max(...P.map(p => (p.at_arrival && p.at_arrival.precipitation_probability) || 0));
+  const label = i => i === 0 ? 'Start' : i === n - 1 ? 'End' : Math.round(P[i].frac * 100) + '%';
+  let html = `<div class="wx t-${kind}" id="wxcard">
+    <div class="wx-top"><span class="wx-big">${c0.icon}</span>
+      <div class="wx-main"><div class="wx-temp">${Math.round(c0.temp_c)}&deg;C</div><div class="wx-cond">${esc(c0.label)} at start</div>
+        <div class="wx-sub">Wind ${Math.round(c0.wind_kmh ?? 0)} km/h &middot; rain chance up to ${maxPop}%</div></div>
+      <div class="wx-meta"><span class="wx-live"><i></i>Live</span><span>${hm}</span><button class="wx-refresh" onclick="loadWeather(true)" title="Refresh weather">&#8635; Refresh</button></div></div>`;
+  html += wxData.alert
+    ? `<div class="wx-alert ${worstKind === 'storm' ? 'storm' : ''}"><span>&#9888;&#65039;</span><span>${esc(wxData.alert)}</span></div>`
+    : `<div class="wx-ok">&#10003; No rain expected along this route</div>`;
+  html += `<div class="wx-line">` + P.map((p, i) => {
+    const a = p.at_arrival || {}, pop = a.precipitation_probability ?? 0;
+    return `<div class="wx-stop"><div class="lbl">${label(i)}</div><div class="pip"></div><div class="ic">${(a.icon || p.now.icon)}</div>
+      <div class="tp">${Math.round(a.temperature_2m ?? p.now.temp_c)}&deg;</div>
+      <div class="rain" title="Rain chance"><i style="width:${pop}%"></i></div><div class="pc">${pop}%</div></div>`;
+  }).join('') + `</div>`;
+  html += `<details><summary>Details by point</summary>` + P.map((p, i) => {
+    const a = p.at_arrival || {}, c = p.now;
     const nm = i === 0 ? 'Start' : i === n - 1 ? 'Destination' : Math.round(p.frac * 100) + '% of the way';
-    const pop = a.precipitation_probability != null ? ` · ${a.precipitation_probability}% rain chance` : '';
-    html += `<div class="pt"><span class="ic">${c.icon}</span><span class="lab">${nm}: ${c.label}<small>On arrival: ${a.label || '–'}${pop} · wind ${Math.round(c.wind_kmh ?? 0)} km/h</small></span><span class="tp">${Math.round(c.temp_c)}&deg;C</span></div>`;
-  });
-  return html + `<div class="fine" style="color:var(--muted);font-size:11px;margin-top:6px">Open-Meteo. Pins show the forecast at your expected arrival time.</div></div>`;
+    return `<div class="pt"><span style="font-size:20px">${c.icon}</span><span class="lab"><b>${nm}</b>: ${esc(c.label)} now<small>On arrival: ${esc(a.label || '–')} &middot; wind ${Math.round(c.wind_kmh ?? 0)} km/h &middot; ${(c.precip_mm ?? 0).toFixed(1)} mm now</small></span><span>${Math.round(c.temp_c)}&deg;C</span></div>`;
+  }).join('') + `</details>
+    <div class="wx-fine">Open-Meteo &middot; pins and the timeline show the forecast at your expected arrival time &middot; updates every 5 min</div></div>`;
+  return html;
 }
 function renderWeatherPanel() {
   const el = document.getElementById('wx'); if (el) el.innerHTML = wxPanel();

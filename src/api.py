@@ -673,11 +673,11 @@ def _sample_points(coords, n=4):
     return [list(coords[i]) for i in idx]
 
 
-def _fetch_weather(points):
+def _fetch_weather(points, force=False):
     import requests
     key = tuple((round(a, 2), round(b, 2)) for a, b in points)
     hit = _WX_CACHE.get(key)
-    if hit and _time.time() - hit[0] < _WX_TTL:
+    if hit and not force and _time.time() - hit[0] < _WX_TTL:
         return hit[1]
     r = requests.get("https://api.open-meteo.com/v1/forecast", timeout=8, params={
         "latitude": ",".join(f"{p[0]:.4f}" for p in points),
@@ -707,7 +707,7 @@ def route_weather():
     total = float(body.get("time_s") or 0)
     pts = _sample_points(coords)
     try:
-        data = _fetch_weather(pts)
+        data = _fetch_weather(pts, bool(body.get("force")))
     except Exception as e:
         return jsonify({"error": f"Weather service unavailable: {e}"}), 502
     now = _time.time()
